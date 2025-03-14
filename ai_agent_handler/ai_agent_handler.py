@@ -18,7 +18,9 @@ from silvaengine_utility import Utility
 
 
 class AIAgentEventHandler:
-    def __init__(self, logger: logging.Logger, agent, **setting: Dict[str, Any]):
+    def __init__(
+        self, logger: logging.Logger, agent: Dict[str, Any], **setting: Dict[str, Any]
+    ):
         """
         Initialize the OpenAIFunctBase class.
         :param logger: Logger instance for logging errors and information.
