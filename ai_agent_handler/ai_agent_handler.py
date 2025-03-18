@@ -12,6 +12,7 @@ import zipfile
 from typing import Any, Callable, Dict, Optional
 
 import boto3
+import humps
 from botocore.exceptions import BotoCoreError, NoCredentialsError
 
 from silvaengine_utility import Utility
@@ -19,7 +20,11 @@ from silvaengine_utility import Utility
 
 class AIAgentEventHandler:
     def __init__(
-        self, logger: logging.Logger, agent: Dict[str, Any], **setting: Dict[str, Any]
+        self,
+        logger: logging.Logger,
+        agent: Dict[str, Any],
+        run: Dict[str, Any],
+        **setting: Dict[str, Any],
     ):
         """
         Initialize the OpenAIFunctBase class.
@@ -30,6 +35,7 @@ class AIAgentEventHandler:
             self.logger = logger
             self.endpoint_id = setting.get("endpoint_id")
             self.agent = agent
+            self.run = run
             self.schemas = {}
             self.setting = setting
             self._initialize_aws_services(setting)
@@ -65,35 +71,12 @@ class AIAgentEventHandler:
         os.makedirs(self.funct_zip_path, exist_ok=True)
         os.makedirs(self.funct_extract_path, exist_ok=True)
 
-    def fetch_graphql_schema(
-        self, endpoint_id: str, function_name: str
-    ) -> Dict[str, Any]:
-        if self.schemas.get(function_name) is None:
-            self.schemas[function_name] = Utility.fetch_graphql_schema(
-                self.logger,
-                endpoint_id,
-                function_name,
-                setting=self.setting,
-                test_mode=self.setting.get("test_mode"),
-                aws_lambda=self.aws_lambda,
-            )
-        return self.schemas[function_name]
-
-    def execute_graphql_query(
-        self,
-        endpoint_id: str,
-        function_name: str,
-        operation_name: str,
-        operation_type: str,
-        variables: Dict[str, Any],
-    ) -> Dict[str, Any]:
-        schema = self.fetch_graphql_schema(endpoint_id, function_name)
-        return Utility.execute_graphql_query(
+    def invoke_async_funct(self, function_name, **params: Dict[str, Any]) -> None:
+        Utility.invoke_funct_on_aws_lambda(
             self.logger,
-            endpoint_id,
+            self.endpoint_id,
             function_name,
-            Utility.generate_graphql_operation(operation_name, operation_type, schema),
-            variables,
+            params=params,
             setting=self.setting,
             test_mode=self.setting.get("test_mode"),
             aws_lambda=self.aws_lambda,
