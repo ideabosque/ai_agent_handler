@@ -23,7 +23,6 @@ class AIAgentEventHandler:
         self,
         logger: logging.Logger,
         agent: Dict[str, Any],
-        run: Dict[str, Any],
         **setting: Dict[str, Any],
     ):
         """
@@ -35,7 +34,7 @@ class AIAgentEventHandler:
             self.logger = logger
             self.endpoint_id = setting.get("endpoint_id")
             self.agent = agent
-            self.run = run
+            self._run = None
             self.schemas = {}
             self.setting = setting
             self._initialize_aws_services(setting)
@@ -47,6 +46,14 @@ class AIAgentEventHandler:
             log = traceback.format_exc()
             self.logger.error(log)
             raise e
+
+    @property
+    def run(self) -> Dict[str, Any]:
+        return self._run
+
+    @run.setter
+    def run(self, value: Dict[str, Any]) -> None:
+        self._run = value
 
     def _initialize_aws_services(self, setting: Dict[str, Any]) -> None:
         if all(
@@ -72,6 +79,16 @@ class AIAgentEventHandler:
         os.makedirs(self.funct_extract_path, exist_ok=True)
 
     def invoke_async_funct(self, function_name, **params: Dict[str, Any]) -> None:
+        if self._run is None:
+            return
+
+        params.update(
+            {
+                "thread_uuid": self._run["thread"]["thread_uuid"],
+                "run_uuid": self._run["run_uuid"],
+                "updated_by": self._run["updated_by"],
+            }
+        )
         Utility.invoke_funct_on_aws_lambda(
             self.logger,
             self.endpoint_id,
