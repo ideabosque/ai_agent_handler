@@ -4,6 +4,7 @@ from __future__ import annotations
 
 __author__ = "bibow"
 
+import json
 import logging
 import os
 import sys
@@ -12,7 +13,6 @@ import zipfile
 from typing import Any, Callable, Dict, Optional
 
 import boto3
-import humps
 from botocore.exceptions import BotoCoreError, NoCredentialsError
 
 from silvaengine_utility import Utility
@@ -35,6 +35,8 @@ class AIAgentEventHandler:
             self.endpoint_id = setting.get("endpoint_id")
             self.agent = agent
             self._run = None
+            self._connection_id = None
+            self._websocket_by_queue = False
             self.schemas = {}
             self.setting = setting
             self._initialize_aws_services(setting)
@@ -54,6 +56,22 @@ class AIAgentEventHandler:
     @run.setter
     def run(self, value: Dict[str, Any]) -> None:
         self._run = value
+
+    @property
+    def connection_id(self) -> str:
+        return self._connection_id
+
+    @connection_id.setter
+    def connection_id(self, value: str) -> None:
+        self._connection_id = value
+
+    @property
+    def websocket_by_queue(self) -> bool:
+        return self._websocket_by_queue
+
+    @websocket_by_queue.setter
+    def websocket_by_queue(self, value: bool) -> None:
+        self._websocket_by_queue = value
 
     def _initialize_aws_services(self, setting: Dict[str, Any]) -> None:
         if all(
@@ -161,36 +179,109 @@ class AIAgentEventHandler:
             self.logger.error(log)
             raise e
 
+    # Utility Function: Validate and Complete JSON
+    def try_complete_json(self, accumulated: str) -> str:
+        """
+        Try to validate and complete the JSON by adding various combinations of closing brackets.
+
+        Args:
+            accumulated (str): The accumulated JSON string that may be incomplete.
+
+        Returns:
+            str: The ending string that successfully completes the JSON, or an empty string if no valid completion is found.
+        """
+        try:
+            json.loads(accumulated)  # Attempt to parse with the accumulated
+            return accumulated
+        except json.JSONDecodeError:
+            possible_endings = ["}", "]", "}", "}]", "}]}", "}}"]
+            for ending in possible_endings:
+                try:
+                    completed_json = accumulated + ending
+                    json.loads(
+                        completed_json
+                    )  # Attempt to parse with the potential ending
+                    return ending  # If parsing succeeds, return the successful ending
+                except json.JSONDecodeError:
+                    continue
+        return ""  # If no ending works, return empty string
+
+    # Helper Function: Process and Send JSON
+    def process_and_send_json(
+        self,
+        complete_accumulated_json: str,
+        accumulated_partial_json: str,
+        data_format: str,
+    ) -> str:
+        """
+        Process and send JSON if it forms a valid structure.
+
+        Args:
+            complete_accumulated_json (str): The complete JSON string for validation.
+            accumulated_partial_json (str): The accumulated partial JSON string.
+            data_format (str): The format of the data being sent.
+
+        Returns:
+            tuple: A tuple containing:
+                - str: The updated complete JSON string after sending the partial JSON
+                - str: The updated accumulated partial JSON string
+        """
+        combined_json = complete_accumulated_json + accumulated_partial_json
+        ending = self.try_complete_json(combined_json)
+
+        if ending:
+            # TODO: Send the accumulated_partial_json to WSS.
+            self.send_data_to_websocket(
+                data_format=data_format,
+                chunk_delta=accumulated_partial_json,
+                is_message_end=False,
+            )
+            complete_accumulated_json += (
+                accumulated_partial_json  # Update complete JSON
+            )
+            accumulated_partial_json = ""  # Reset the partial JSON accumulator
+
+        return complete_accumulated_json, accumulated_partial_json
+
     def send_data_to_websocket(
         self,
-        connection_id: str,
-        data: Dict[str, Any],
-        message_group_id: str = None,
+        data_format: str = "text",
+        chunk_delta: str = "",
+        is_message_end: bool = False,
     ) -> None:
         """
         Send data to WebSocket connection.
 
         Args:
-            logger: Logger instance for logging.
-            endpoint_id: AWS Lambda endpoint identifier.
-            connection_id: WebSocket connection ID.
-            data: Data to be sent.
-            message_group_id: Unique identifier for message grouping.
-            setting: Configuration settings.
+            data_format (str): Format of the data being sent (default: "text")
+            chunk_delta (str): Data chunk to be sent (default: "")
+            is_message_end (bool): Flag indicating if this is the last message (default: False)
         """
-        if connection_id:
-            Utility.invoke_funct_on_aws_lambda(
-                self.logger,
-                self.endpoint_id,
-                "send_data_to_websocket",
-                params={
-                    "connection_id": connection_id,
-                    "data": data,
-                },
-                message_group_id=message_group_id,
-                setting=self.setting,
-                test_mode=self.setting.get("test_mode"),
-                aws_lambda=self.aws_lambda,
-            )
+        if self._connection_id is None or self._run is None:
             return
+
+        message_group_id = f"{self._connection_id}-{self._run['run_uuid']}"
+
+        data = Utility.json_dumps(
+            {
+                "message_group_id": message_group_id,
+                "data_format": data_format,
+                "chunk_delta": chunk_delta,
+                "is_message_end": is_message_end,
+            }
+        )
+
+        Utility.invoke_funct_on_aws_lambda(
+            self.logger,
+            self.endpoint_id,
+            "send_data_to_websocket",
+            params={
+                "connection_id": self._connection_id,
+                "data": data,
+            },
+            message_group_id=message_group_id if self._websocket_by_queue else None,
+            setting=self.setting,
+            test_mode=self.setting.get("test_mode"),
+            aws_lambda=self.aws_lambda,
+        )
         return
