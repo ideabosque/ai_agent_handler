@@ -42,13 +42,6 @@ class AIAgentEventHandler:
             self._task_queue = None
             self.schemas = {}
             self.setting = setting
-            self.model_setting = dict(
-                agent["configuration"],
-                **{
-                    "model": agent["llm_configuration"].get("model"),
-                    "instructions": agent["instructions"],
-                },
-            )
 
             # Will hold partial text from streaming
             self.accumulated_text: str = ""
