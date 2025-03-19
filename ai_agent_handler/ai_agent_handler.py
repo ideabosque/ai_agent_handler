@@ -32,8 +32,9 @@ class AIAgentEventHandler:
         """
         try:
             self.logger = logger
-            self.endpoint_id = setting.get("endpoint_id")
+
             self.agent = agent
+            self._endpoint_id = None
             self._run = None
             self._connection_id = None
             self._task_queue = None
@@ -48,6 +49,14 @@ class AIAgentEventHandler:
             log = traceback.format_exc()
             self.logger.error(log)
             raise e
+
+    @property
+    def endpoint_id(self) -> str:
+        return self._endpoint_id
+
+    @endpoint_id.setter
+    def endpoint_id(self, value: str) -> None:
+        self._endpoint_id = value
 
     @property
     def run(self) -> Dict[str, Any]:
@@ -109,7 +118,7 @@ class AIAgentEventHandler:
         )
         Utility.invoke_funct_on_aws_lambda(
             self.logger,
-            self.endpoint_id,
+            self._endpoint_id,
             function_name,
             params=params,
             setting=self.setting,
@@ -273,7 +282,7 @@ class AIAgentEventHandler:
 
         Utility.invoke_funct_on_aws_lambda(
             self.logger,
-            self.endpoint_id,
+            self._endpoint_id,
             "send_data_to_websocket",
             params={
                 "connection_id": self._connection_id,
