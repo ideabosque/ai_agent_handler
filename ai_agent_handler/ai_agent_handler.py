@@ -31,8 +31,10 @@ class AIAgentEventHandler:
         :param setting: Configuration setting for AWS credentials and region.
         """
         try:
-            self.logger = logger
+            self._initialize_aws_services(setting)
+            self._setup_function_paths(setting)
 
+            self.logger = logger
             self.agent = agent
             self._endpoint_id = None
             self._run = None
@@ -40,8 +42,19 @@ class AIAgentEventHandler:
             self._task_queue = None
             self.schemas = {}
             self.setting = setting
-            self._initialize_aws_services(setting)
-            self._setup_function_paths(setting)
+            self.model_setting = dict(
+                agent["configuration"],
+                **{
+                    "model": agent["llm_configuration"].get("model"),
+                    "instructions": agent["instructions"],
+                },
+            )
+
+            # Will hold partial text from streaming
+            self.accumulated_text: str = ""
+            # Will hold the final output message data, if any
+            self.final_output: Dict[str, Any] = {}
+
         except (BotoCoreError, NoCredentialsError) as boto_error:
             self.logger.error(f"AWS Boto3 error: {boto_error}")
             raise boto_error
