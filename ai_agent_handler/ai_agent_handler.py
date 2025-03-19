@@ -36,7 +36,7 @@ class AIAgentEventHandler:
             self.agent = agent
             self._run = None
             self._connection_id = None
-            self._websocket_by_queue = False
+            self._task_queue = None
             self.schemas = {}
             self.setting = setting
             self._initialize_aws_services(setting)
@@ -66,12 +66,12 @@ class AIAgentEventHandler:
         self._connection_id = value
 
     @property
-    def websocket_by_queue(self) -> bool:
-        return self._websocket_by_queue
+    def task_queue(self) -> object:
+        return self._task_queue
 
-    @websocket_by_queue.setter
-    def websocket_by_queue(self, value: bool) -> None:
-        self._websocket_by_queue = value
+    @task_queue.setter
+    def task_queue(self, value: object) -> None:
+        self._task_queue = value
 
     def _initialize_aws_services(self, setting: Dict[str, Any]) -> None:
         if all(
@@ -279,9 +279,10 @@ class AIAgentEventHandler:
                 "connection_id": self._connection_id,
                 "data": data,
             },
-            message_group_id=message_group_id if self._websocket_by_queue else None,
+            message_group_id=message_group_id,
             setting=self.setting,
             test_mode=self.setting.get("test_mode"),
             aws_lambda=self.aws_lambda,
+            task_queue=self._task_queue,
         )
         return
