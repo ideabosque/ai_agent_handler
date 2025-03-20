@@ -245,7 +245,7 @@ class AIAgentEventHandler:
         ending = self.try_complete_json(combined_json)
 
         if ending:
-            # TODO: Send the accumulated_partial_json to WSS.
+            # Send the accumulated partial JSON to WebSocket Service
             self.send_data_to_websocket(
                 data_format=data_format,
                 chunk_delta=accumulated_partial_json,
