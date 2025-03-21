@@ -40,6 +40,7 @@ class AIAgentEventHandler:
             self._run = None
             self._connection_id = None
             self._task_queue = None
+            self._short_term_memory = []
             self.schemas = {}
             self.setting = setting
 
@@ -87,6 +88,14 @@ class AIAgentEventHandler:
     @task_queue.setter
     def task_queue(self, value: object) -> None:
         self._task_queue = value
+
+    @property
+    def short_term_memory(self) -> object:
+        return self._short_term_memory
+
+    @short_term_memory.setter
+    def short_term_memory(self, value: object) -> None:
+        self._short_term_memory = value
 
     def _initialize_aws_services(self, setting: Dict[str, Any]) -> None:
         if all(
