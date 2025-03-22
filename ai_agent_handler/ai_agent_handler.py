@@ -140,6 +140,8 @@ class AIAgentEventHandler:
             test_mode=self.setting.get("test_mode"),
             aws_lambda=self.aws_lambda,
             invocation_type="Event",
+            message_group_id=self._run["run_uuid"],
+            task_queue=self._task_queue,
         )
 
     def module_exists(self, module_name: str) -> bool:
@@ -304,11 +306,11 @@ class AIAgentEventHandler:
                 "connection_id": self._connection_id,
                 "data": data,
             },
-            message_group_id=message_group_id,
             setting=self.setting,
             test_mode=self.setting.get("test_mode"),
             aws_lambda=self.aws_lambda,
             invocation_type="Event",
+            message_group_id=message_group_id,
             task_queue=self._task_queue,
         )
         return
