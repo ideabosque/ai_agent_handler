@@ -136,12 +136,10 @@ class AIAgentEventHandler:
             self._endpoint_id,
             function_name,
             params=params,
-            message_group_id=self._run["run_uuid"],
             setting=self.setting,
             test_mode=self.setting.get("test_mode"),
             aws_lambda=self.aws_lambda,
             invocation_type="Event",
-            task_queue=self._task_queue,
         )
 
     def module_exists(self, module_name: str) -> bool:
