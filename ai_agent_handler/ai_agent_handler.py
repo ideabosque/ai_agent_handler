@@ -139,6 +139,7 @@ class AIAgentEventHandler:
             setting=self.setting,
             test_mode=self.setting.get("test_mode"),
             aws_lambda=self.aws_lambda,
+            invocation_type="Event",
         )
 
     def module_exists(self, module_name: str) -> bool:
@@ -307,6 +308,7 @@ class AIAgentEventHandler:
             setting=self.setting,
             test_mode=self.setting.get("test_mode"),
             aws_lambda=self.aws_lambda,
+            invocation_type="Event",
             task_queue=self._task_queue,
         )
         return
