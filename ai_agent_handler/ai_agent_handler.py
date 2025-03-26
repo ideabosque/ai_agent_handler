@@ -236,6 +236,7 @@ class AIAgentEventHandler:
     # Helper Function: Process and Send JSON
     def process_and_send_json(
         self,
+        index: int,
         complete_accumulated_json: str,
         accumulated_partial_json: str,
         data_format: str,
@@ -259,6 +260,7 @@ class AIAgentEventHandler:
         if ending:
             # Send the accumulated partial JSON to WebSocket Service
             self.send_data_to_websocket(
+                index=index,
                 data_format=data_format,
                 chunk_delta=accumulated_partial_json,
                 is_message_end=False,
@@ -267,11 +269,13 @@ class AIAgentEventHandler:
                 accumulated_partial_json  # Update complete JSON
             )
             accumulated_partial_json = ""  # Reset the partial JSON accumulator
+            index += 1
 
-        return complete_accumulated_json, accumulated_partial_json
+        return index, complete_accumulated_json, accumulated_partial_json
 
     def send_data_to_websocket(
         self,
+        index: int = 0,
         data_format: str = "text",
         chunk_delta: str = "",
         is_message_end: bool = False,
@@ -293,6 +297,7 @@ class AIAgentEventHandler:
             {
                 "message_group_id": message_group_id,
                 "data_format": data_format,
+                "index": index,
                 "chunk_delta": chunk_delta,
                 "is_message_end": is_message_end,
             }
