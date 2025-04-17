@@ -173,23 +173,32 @@ class AIAgentEventHandler:
             zip_ref.extractall(self.funct_extract_path)
         self.logger.info(f"Extracted module to {self.funct_extract_path}")
 
+    def get_class(self, module_name: str, class_name: str) -> Optional[type]:
+        try:
+            # Check if the module exists
+            if not self.module_exists(module_name):
+                # Download and extract the module if it doesn't exist
+                self.download_and_extract_module(module_name)
+
+            # Add the extracted module to sys.path
+            module_path = f"{self.funct_extract_path}/{module_name}"
+            if module_path not in sys.path:
+                sys.path.append(module_path)
+
+            # Import the module and get the class
+            module = __import__(module_name)
+            return getattr(module, class_name)
+        except Exception as e:
+            log = traceback.format_exc()
+            self.logger.error(log)
+            raise e
+
     def get_function(self, function_name: str) -> Optional[Callable]:
         try:
             function = self.agent["functions"].get(function_name)
 
-            # Check if the module exists
-            if not self.module_exists(function["module_name"]):
-                # Download and extract the module if it doesn't exist
-                self.download_and_extract_module(function["module_name"])
-
-            # Add the extracted module to sys.path
-            module_path = f"{self.funct_extract_path}/{function['module_name']}"
-            if module_path not in sys.path:
-                sys.path.append(module_path)
-
-            assistant_function_class = getattr(
-                __import__(function["module_name"]),
-                function["class_name"],
+            assistant_function_class = self.get_class(
+                function["module_name"], function["class_name"]
             )
 
             configuration = self.agent.get("function_configuration", {})
