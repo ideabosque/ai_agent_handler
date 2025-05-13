@@ -24,7 +24,7 @@ class AIAgentEventHandler:
         logger: logging.Logger,
         agent: Dict[str, Any],
         **setting: Dict[str, Any],
-    ):
+    ) -> None:
         """
         Initialize the OpenAIFunctBase class.
         :param logger: Logger instance for logging errors and information.
@@ -119,7 +119,7 @@ class AIAgentEventHandler:
         os.makedirs(self.funct_zip_path, exist_ok=True)
         os.makedirs(self.funct_extract_path, exist_ok=True)
 
-    def invoke_async_funct(self, function_name, **params: Dict[str, Any]) -> None:
+    def invoke_async_funct(self, function_name: str, **params: Dict[str, Any]) -> None:
         if self._run is None:
             return
 
