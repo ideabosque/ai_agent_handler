@@ -41,7 +41,6 @@ class AIAgentEventHandler:
             self._connection_id = None
             self._task_queue = None
             self._short_term_memory = []
-            self.schemas = {}
             self.setting = setting
 
             # Will hold partial text from streaming
