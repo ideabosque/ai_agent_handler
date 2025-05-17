@@ -267,7 +267,7 @@ class AIAgentEventHandler:
 
         if ending:
             # Send the accumulated partial JSON to WebSocket Service
-            self.send_data_to_websocket(
+            self.send_data_to_stream(
                 index=index,
                 data_format=data_format,
                 chunk_delta=accumulated_partial_json,
@@ -281,7 +281,7 @@ class AIAgentEventHandler:
 
         return index, complete_accumulated_json, accumulated_partial_json
 
-    def send_data_to_websocket(
+    def send_data_to_stream(
         self,
         index: int = 0,
         data_format: str = "text",
@@ -314,7 +314,7 @@ class AIAgentEventHandler:
         Utility.invoke_funct_on_aws_lambda(
             self.logger,
             self._endpoint_id,
-            "send_data_to_websocket",
+            "send_data_to_stream",
             params={
                 "connection_id": self._connection_id,
                 "data": data,
