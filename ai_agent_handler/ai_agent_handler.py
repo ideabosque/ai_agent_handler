@@ -281,6 +281,73 @@ class AIAgentEventHandler:
 
         return index, complete_accumulated_json, accumulated_partial_json
 
+    def process_text_content(
+        self, index: int, accumulated_partial_text: str, output_format: str
+    ) -> tuple[int, str]:
+        """
+        Process XML content from accumulated text and send to stream.
+
+        Args:
+            accumulated_partial_text: Text buffer containing potential XML content
+            index: Current stream index
+            output_format: Current output format
+
+        Returns:
+            Tuple of (updated index, remaining text buffer)
+        """
+        # Wait for closing tag before sending, with max buffer size check
+        if ">" in accumulated_partial_text or len(accumulated_partial_text) > 500:
+            # If no closing tag found within buffer limit, treat as regular text
+            if (
+                ">" not in accumulated_partial_text
+                and len(accumulated_partial_text) > 500
+            ):
+                output_format = "text"
+
+            if output_format == "xml":
+                # Extract XML tags and text content
+                xml_parts = []
+                current_text = accumulated_partial_text
+                while "<" in current_text:
+                    start_idx = current_text.find("<")
+                    if start_idx > 0:
+                        xml_parts.append(current_text[:start_idx])
+                    end_idx = current_text.find(">", start_idx)
+                    if end_idx == -1:
+                        xml_parts.append(current_text[start_idx:])
+                        break
+                    xml_parts.append(current_text[start_idx : end_idx + 1])
+                    current_text = current_text[end_idx + 1 :]
+                if current_text:
+                    xml_parts.append(current_text)
+
+                for part in xml_parts:
+                    self.send_data_to_stream(
+                        index=index,
+                        data_format=output_format,
+                        chunk_delta=part,
+                    )
+                    index += 1
+            else:
+                self.send_data_to_stream(
+                    index=index,
+                    data_format=output_format,
+                    chunk_delta=accumulated_partial_text,
+                )
+                index += 1
+            accumulated_partial_text = ""  # For non-XML content, use buffer threshold
+        elif len(accumulated_partial_text) >= int(
+            self.setting.get("accumulated_partial_text_buffer", "10")
+        ):
+            self.send_data_to_stream(
+                index=index,
+                data_format=output_format,
+                chunk_delta=accumulated_partial_text,
+            )
+            accumulated_partial_text = ""
+            index += 1
+        return index, accumulated_partial_text
+
     def send_data_to_stream(
         self,
         index: int = 0,
