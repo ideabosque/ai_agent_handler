@@ -330,9 +330,7 @@ class AIAgentEventHandler:
                         self.send_data_to_stream(
                             index=index,
                             data_format=(
-                                "text"
-                                if "<" not in part and ">" not in part
-                                else output_format
+                                output_format if "<" in part and ">" in part else "text"
                             ),
                             chunk_delta=part,
                         )
