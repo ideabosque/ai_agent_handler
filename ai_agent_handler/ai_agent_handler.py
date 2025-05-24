@@ -320,6 +320,7 @@ class AIAgentEventHandler:
                         end_idx = current_text.find(">", start_idx)
                         if end_idx == -1:
                             xml_parts.append(current_text[start_idx:])
+                            current_text = ""
                             break
                         xml_parts.append(current_text[start_idx : end_idx + 1])
                         current_text = current_text[end_idx + 1 :]
