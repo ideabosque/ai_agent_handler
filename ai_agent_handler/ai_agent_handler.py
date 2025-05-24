@@ -329,7 +329,11 @@ class AIAgentEventHandler:
                     for part in xml_parts:
                         self.send_data_to_stream(
                             index=index,
-                            data_format=output_format,
+                            data_format=(
+                                "text"
+                                if "<" not in part and ">" not in part
+                                else output_format
+                            ),
                             chunk_delta=part,
                         )
                         index += 1
