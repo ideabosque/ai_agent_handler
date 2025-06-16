@@ -10,7 +10,7 @@ import os
 import sys
 import traceback
 import zipfile
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 import boto3
 from botocore.exceptions import BotoCoreError, NoCredentialsError
@@ -47,6 +47,7 @@ class AIAgentEventHandler:
             self.accumulated_text: str = ""
             # Will hold the final output message data, if any
             self.final_output: Dict[str, Any] = {}
+            self.uploaded_files: List[Dict[str, Any]] = []
 
         except (BotoCoreError, NoCredentialsError) as boto_error:
             self.logger.error(f"AWS Boto3 error: {boto_error}")
