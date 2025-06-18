@@ -4,6 +4,7 @@ from __future__ import annotations
 
 __author__ = "bibow"
 
+import asyncio
 import json
 import logging
 import os
@@ -15,6 +16,7 @@ from typing import Any, Callable, Dict, List, Optional
 import boto3
 from botocore.exceptions import BotoCoreError, NoCredentialsError
 
+from mcp_http_client import MCPHttpClient
 from silvaengine_utility import Utility
 
 
@@ -42,6 +44,10 @@ class AIAgentEventHandler:
             self._task_queue = None
             self._short_term_memory = []
             self.setting = setting
+
+            if "mcp_servers" in self.agent:
+                self.mcp_http_clients = []
+                self._initialize_mcp_http_clients(logger, self.agent["mcp_servers"])
 
             # Will hold partial text from streaming
             self.accumulated_text: str = ""
@@ -120,6 +126,41 @@ class AIAgentEventHandler:
         os.makedirs(self.funct_zip_path, exist_ok=True)
         os.makedirs(self.funct_extract_path, exist_ok=True)
 
+    def _initialize_mcp_http_clients(
+        self, logger: logging.Logger, mcp_servers: List[Dict[str, Any]]
+    ):
+        for mcp_server in mcp_servers:
+            mcp_http_client = MCPHttpClient(logger, **mcp_server["setting"])
+            tools = asyncio.run(self._run_list_mcp_http_tools(mcp_http_client))
+            tools_for_llm = mcp_http_client.export_tools_for_llm(
+                self.agent["llm_name"], tools
+            )
+            if "tools" in self.agent["configuration"]:
+                self.agent["configuration"]["tools"].extend(tools_for_llm)
+            else:
+                self.agent["configuration"]["tools"] = tools_for_llm
+            self.mcp_http_clients.append(
+                {
+                    "name": mcp_server["name"],
+                    "client": mcp_http_client,
+                    "tools": [tool.name for tool in tools],
+                }
+            )
+
+    async def _run_list_mcp_http_tools(self, mcp_http_client):
+        async with mcp_http_client as client:
+            return await client.list_tools()
+
+    async def _run_call_mcp_http_tool(self, mcp_http_client, name, arguments):
+        self.logger.info(f"Calling MCP HTTP tool: {name} with arguments: {arguments}")
+
+        async with mcp_http_client as client:
+            result = await client.call_tool(name, arguments)
+
+            self.logger.info(f"MCP HTTP tool {name} returned result: {result}")
+
+            return result
+
     def invoke_async_funct(self, function_name: str, **params: Dict[str, Any]) -> None:
         if self._run is None:
             return
@@ -195,6 +236,24 @@ class AIAgentEventHandler:
 
     def get_function(self, function_name: str) -> Optional[Callable]:
         try:
+            # Find the MCP HTTP client that has the requested function name in its available tools
+            mcp_http_client = next(
+                (
+                    client["client"]
+                    for client in self.mcp_http_clients
+                    if function_name in client["tools"]
+                ),
+                None,
+            )
+
+            # If function is found in MCP tools, return a lambda that calls it through the MCP client
+            if mcp_http_client:
+                return lambda **arguments: asyncio.run(
+                    self._run_call_mcp_http_tool(
+                        mcp_http_client, function_name, arguments
+                    )
+                )
+
             function = self.agent["functions"].get(function_name)
 
             assistant_function_class = self.get_class(
