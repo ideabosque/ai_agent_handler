@@ -45,8 +45,8 @@ class AIAgentEventHandler:
             self._short_term_memory = []
             self.setting = setting
 
+            self.mcp_http_clients = []
             if "mcp_servers" in self.agent:
-                self.mcp_http_clients = []
                 self._initialize_mcp_http_clients(logger, self.agent["mcp_servers"])
 
             # Will hold partial text from streaming
