@@ -47,7 +47,25 @@ class AIAgentEventHandler:
 
             self.mcp_http_clients = []
             if "mcp_servers" in self.agent:
-                self._initialize_mcp_http_clients(logger, self.agent["mcp_servers"])
+                if self.agent["llm_name"] in ["gemini", "claude"]:
+                    self._initialize_mcp_http_clients(logger, self.agent["mcp_servers"])
+                elif self.agent["llm_name"] == "openai":
+                    tools = [
+                        {
+                            "type": "mcp",
+                            "server_label": mcp_server["name"],
+                            "server_url": mcp_server["setting"]["base_url"],
+                            "headers": mcp_server["setting"]["headers"],
+                            "require_approval": "never",
+                        }
+                        for mcp_server in self.agent["mcp_servers"]
+                    ]
+                    if "tools" in self.agent["configuration"]:
+                        self.agent["configuration"]["tools"].extend(tools)
+                    else:
+                        self.agent["configuration"]["tools"] = tools
+                else:
+                    raise Exception(f"Unsupported LLM name: {self.agent['llm_name']}")
 
             # Will hold partial text from streaming
             self.accumulated_text: str = ""
