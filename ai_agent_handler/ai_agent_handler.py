@@ -66,7 +66,7 @@ class AIAgentEventHandler:
                         self.agent["configuration"]["tools"] = tools
                 else:
                     raise Exception(
-                        f"Unsupported LLM name: {self.agent["llm"]['llm_name']}"
+                        f"Unsupported LLM name: {self.agent['llm']['llm_name']}"
                     )
 
             # Will hold partial text from streaming
