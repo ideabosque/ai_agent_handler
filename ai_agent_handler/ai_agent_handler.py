@@ -153,7 +153,7 @@ class AIAgentEventHandler:
             mcp_http_client = MCPHttpClient(logger, **mcp_server["setting"])
             tools = asyncio.run(self._run_list_mcp_http_tools(mcp_http_client))
             tools_for_llm = mcp_http_client.export_tools_for_llm(
-                self.agent["llm_name"], tools
+                self.agent["llm"]["llm_name"], tools
             )
             if "tools" in self.agent["configuration"]:
                 self.agent["configuration"]["tools"].extend(tools_for_llm)
