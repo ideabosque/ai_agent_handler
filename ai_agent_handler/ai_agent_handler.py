@@ -205,55 +205,6 @@ class AIAgentEventHandler:
             task_queue=self._task_queue,
         )
 
-    def module_exists(self, module_name: str) -> bool:
-        """Check if the module exists in the specified path."""
-        module_dir = os.path.join(self.funct_extract_path, module_name)
-        if os.path.exists(module_dir) and os.path.isdir(module_dir):
-            self.logger.info(
-                f"Module {module_name} found in {self.funct_extract_path}."
-            )
-            return True
-        self.logger.info(
-            f"Module {module_name} not found in {self.funct_extract_path}."
-        )
-        return False
-
-    def download_and_extract_module(self, module_name: str) -> None:
-        """Download and extract the module from S3 if not already extracted."""
-        key = f"{module_name}.zip"
-        zip_path = f"{self.funct_zip_path}/{key}"
-
-        self.logger.info(
-            f"Downloading module from S3: bucket={self.funct_bucket_name}, key={key}"
-        )
-        self.aws_s3.download_file(self.funct_bucket_name, key, zip_path)
-        self.logger.info(f"Downloaded {key} from S3 to {zip_path}")
-
-        # Extract the ZIP file
-        with zipfile.ZipFile(zip_path, "r") as zip_ref:
-            zip_ref.extractall(self.funct_extract_path)
-        self.logger.info(f"Extracted module to {self.funct_extract_path}")
-
-    def get_class(self, module_name: str, class_name: str) -> Optional[type]:
-        try:
-            # Check if the module exists
-            if not self.module_exists(module_name):
-                # Download and extract the module if it doesn't exist
-                self.download_and_extract_module(module_name)
-
-            # Add the extracted module to sys.path
-            module_path = f"{self.funct_extract_path}/{module_name}"
-            if module_path not in sys.path:
-                sys.path.append(module_path)
-
-            # Import the module and get the class
-            module = __import__(module_name)
-            return getattr(module, class_name)
-        except Exception as e:
-            log = traceback.format_exc()
-            self.logger.error(log)
-            raise e
-
     def get_function(self, function_name: str) -> Optional[Callable]:
         try:
             # Find the MCP HTTP client that has the requested function name in its available tools
@@ -274,21 +225,7 @@ class AIAgentEventHandler:
                     )
                 )
 
-            function = self.agent["functions"].get(function_name)
-
-            assistant_function_class = self.get_class(
-                function["module_name"], function["class_name"]
-            )
-
-            configuration = self.agent.get("function_configuration", {})
-            configuration.update(function.get("configuration", {}))
-            return getattr(
-                assistant_function_class(
-                    self.logger,
-                    **Utility.json_loads(Utility.json_dumps(configuration)),
-                ),
-                function_name,
-            )
+            raise Exception(f"Function {function_name} not found in MCP tools")
         except Exception as e:
             log = traceback.format_exc()
             self.logger.error(log)
