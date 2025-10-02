@@ -318,13 +318,12 @@ class AIAgentEventHandler:
             output_format = "xml"
 
             # Wait for closing tag before sending, with max buffer size check
-            if ">" in accumulated_partial_text or len(accumulated_partial_text) > int(
-                self.setting.get("accumulated_partial_text_buffer", "10")
-            ):
+            if ">" in accumulated_partial_text or len(accumulated_partial_text) > 2000:
                 # If no closing tag found within buffer limit, treat as regular text
-                if ">" not in accumulated_partial_text and len(
-                    accumulated_partial_text
-                ) > int(self.setting.get("accumulated_partial_text_buffer", "10")):
+                if (
+                    ">" not in accumulated_partial_text
+                    and len(accumulated_partial_text) > 2000
+                ):
                     output_format = "text"
 
                 if output_format == "xml":
