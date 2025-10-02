@@ -314,15 +314,18 @@ class AIAgentEventHandler:
         """
 
         # Check if text contains XML-style tags and update format
-        if "<" in accumulated_partial_text:
+        if accumulated_partial_text.find("<") != -1:
             output_format = "xml"
 
             # Wait for closing tag before sending, with max buffer size check
-            if ">" in accumulated_partial_text or len(accumulated_partial_text) > 2000:
+            if (
+                accumulated_partial_text.find(">") != -1
+                or len(accumulated_partial_text) > 500
+            ):
                 # If no closing tag found within buffer limit, treat as regular text
                 if (
-                    ">" not in accumulated_partial_text
-                    and len(accumulated_partial_text) > 2000
+                    accumulated_partial_text.find(">") == -1
+                    and len(accumulated_partial_text) > 500
                 ):
                     output_format = "text"
 
