@@ -34,7 +34,6 @@ class AIAgentEventHandler:
         """
         try:
             self._initialize_aws_services(setting)
-            self._setup_function_paths(setting)
 
             self.logger = logger
             self.agent = agent
@@ -47,9 +46,7 @@ class AIAgentEventHandler:
 
             self.mcp_http_clients = []
             if "mcp_servers" in self.agent:
-                if self.agent["llm"]["llm_name"] in ["gemini", "claude"]:
-                    self._initialize_mcp_http_clients(logger, self.agent["mcp_servers"])
-                elif self.agent["llm"]["llm_name"] == "openai":
+                if self.agent["llm"]["llm_name"] in setting.get("mcp_llm_native", []):
                     tools = [
                         {
                             "type": "mcp",
@@ -65,9 +62,14 @@ class AIAgentEventHandler:
                     else:
                         self.agent["configuration"]["tools"] = tools
                 else:
-                    raise Exception(
-                        f"Unsupported LLM name: {self.agent['llm']['llm_name']}"
-                    )
+                    if self.agent["llm"]["llm_name"] in ["gemini", "claude", "openai"]:
+                        self._initialize_mcp_http_clients(
+                            logger, self.agent["mcp_servers"]
+                        )
+                    else:
+                        raise Exception(
+                            f"Unsupported LLM name: {self.agent['llm']['llm_name']}"
+                        )
 
             # Will hold partial text from streaming
             self.accumulated_text: str = ""
@@ -138,13 +140,6 @@ class AIAgentEventHandler:
 
         self.aws_lambda = boto3.client("lambda", **aws_credentials)
         self.aws_s3 = boto3.client("s3", **aws_credentials)
-
-    def _setup_function_paths(self, setting: Dict[str, Any]) -> None:
-        self.funct_bucket_name = setting.get("funct_bucket_name")
-        self.funct_zip_path = setting.get("funct_zip_path", "/tmp/funct_zips")
-        self.funct_extract_path = setting.get("funct_extract_path", "/tmp/functs")
-        os.makedirs(self.funct_zip_path, exist_ok=True)
-        os.makedirs(self.funct_extract_path, exist_ok=True)
 
     def _initialize_mcp_http_clients(
         self, logger: logging.Logger, mcp_servers: List[Dict[str, Any]]
@@ -314,17 +309,14 @@ class AIAgentEventHandler:
         """
 
         # Check if text contains XML-style tags and update format
-        if accumulated_partial_text.find("<") != -1:
+        if "<" in accumulated_partial_text:
             output_format = "xml"
 
             # Wait for closing tag before sending, with max buffer size check
-            if (
-                accumulated_partial_text.find(">") != -1
-                or len(accumulated_partial_text) > 500
-            ):
+            if ">" in accumulated_partial_text or len(accumulated_partial_text) > 500:
                 # If no closing tag found within buffer limit, treat as regular text
                 if (
-                    accumulated_partial_text.find(">") == -1
+                    ">" not in accumulated_partial_text
                     and len(accumulated_partial_text) > 500
                 ):
                     output_format = "text"
