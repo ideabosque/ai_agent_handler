@@ -46,7 +46,7 @@ class AIAgentEventHandler:
 
             self.mcp_http_clients = []
             if "mcp_servers" in self.agent:
-                if self.agent["llm"]["llm_name"] in setting.get("mcp_llm_native", []):
+                if self.agent["configuration"].pop("mcp_llm_native", False):
                     tools = [
                         {
                             "type": "mcp",
