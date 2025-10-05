@@ -62,7 +62,7 @@ class AIAgentEventHandler:
                     else:
                         self.agent["configuration"]["tools"] = tools
                 else:
-                    if self.agent["llm"]["llm_name"] in ["gemini", "claude", "openai"]:
+                    if self.agent["llm"]["llm_name"] in ["gemini", "claude", "gpt"]:
                         self._initialize_mcp_http_clients(
                             logger, self.agent["mcp_servers"]
                         )
