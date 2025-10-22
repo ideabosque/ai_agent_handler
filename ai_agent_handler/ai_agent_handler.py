@@ -7,10 +7,7 @@ __author__ = "bibow"
 import asyncio
 import json
 import logging
-import os
-import sys
 import traceback
-import zipfile
 from typing import Any, Callable, Dict, List, Optional
 
 import boto3
@@ -91,7 +88,7 @@ class AIAgentEventHandler:
             raise e
 
     @property
-    def endpoint_id(self) -> str:
+    def endpoint_id(self) -> str | None:
         return self._endpoint_id
 
     @endpoint_id.setter
@@ -99,7 +96,7 @@ class AIAgentEventHandler:
         self._endpoint_id = value
 
     @property
-    def run(self) -> Dict[str, Any]:
+    def run(self) -> Dict[str, Any] | None:
         return self._run
 
     @run.setter
@@ -107,7 +104,7 @@ class AIAgentEventHandler:
         self._run = value
 
     @property
-    def connection_id(self) -> str:
+    def connection_id(self) -> str | None:
         return self._connection_id
 
     @connection_id.setter
@@ -265,7 +262,7 @@ class AIAgentEventHandler:
         complete_accumulated_json: str,
         accumulated_partial_json: str,
         data_format: str,
-    ) -> str:
+    ) -> tuple[int, str, str]:
         """
         Process and send JSON if it forms a valid structure.
 
@@ -299,7 +296,11 @@ class AIAgentEventHandler:
         return index, complete_accumulated_json, accumulated_partial_json
 
     def process_text_content(
-        self, index: int, accumulated_partial_text: str, output_format: str
+        self,
+        index: int,
+        accumulated_partial_text: str,
+        output_format: str,
+        suffix: str = "",
     ) -> tuple[int, str]:
         """
         Process XML content from accumulated text and send to stream.
@@ -351,6 +352,7 @@ class AIAgentEventHandler:
                                 output_format if "<" in part and ">" in part else "text"
                             ),
                             chunk_delta=part,
+                            suffix=suffix,
                         )
                         index += 1
                 else:
@@ -358,6 +360,7 @@ class AIAgentEventHandler:
                         index=index,
                         data_format=output_format,
                         chunk_delta=accumulated_partial_text,
+                        suffix=suffix,
                     )
                     index += 1
                 accumulated_partial_text = (
@@ -370,6 +373,7 @@ class AIAgentEventHandler:
                 index=index,
                 data_format=output_format,
                 chunk_delta=accumulated_partial_text,
+                suffix=suffix,
             )
             accumulated_partial_text = ""
             index += 1
@@ -381,6 +385,7 @@ class AIAgentEventHandler:
         data_format: str = "text",
         chunk_delta: str = "",
         is_message_end: bool = False,
+        suffix: str = "",
     ) -> None:
         """
         Send data to WebSocket connection.
@@ -394,6 +399,8 @@ class AIAgentEventHandler:
             return
 
         message_group_id = f"{self._connection_id}-{self._run['run_uuid']}"
+        if suffix:
+            message_group_id += f"-{suffix}"
 
         data = Utility.json_dumps(
             {
