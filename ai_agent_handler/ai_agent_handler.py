@@ -64,6 +64,7 @@ class AIAgentEventHandler:
                         "claude",
                         "gpt",
                         "ollama",
+                        "travrse",
                     ]:
                         self._initialize_mcp_http_clients(
                             logger, self.agent["mcp_servers"]
@@ -146,16 +147,34 @@ class AIAgentEventHandler:
     def _initialize_mcp_http_clients(
         self, logger: logging.Logger, mcp_servers: List[Dict[str, Any]]
     ):
+        if "tools" not in self.agent["configuration"]:
+            self.agent["configuration"]["tools"] = []
+
         for mcp_server in mcp_servers:
             mcp_http_client = MCPHttpClient(logger, **mcp_server["setting"])
             tools = asyncio.run(self._run_list_mcp_http_tools(mcp_http_client))
             tools_for_llm = mcp_http_client.export_tools_for_llm(
                 self.agent["llm"]["llm_name"], tools
             )
-            if "tools" in self.agent["configuration"]:
-                self.agent["configuration"]["tools"].extend(tools_for_llm)
-            else:
-                self.agent["configuration"]["tools"] = tools_for_llm
+
+            if self.agent["llm"]["llm_name"] == "travrse":
+                mcp_proxy = self.agent["configuration"]["mcp_proxy"]
+                tools_for_llm = [
+                    dict(
+                        tool,
+                        **{
+                            "config": {
+                                "url": f"{mcp_proxy['base_url']}/{tool['name']}",
+                                "method": "POST",
+                                "headers": mcp_proxy["headers"],
+                            }
+                        },
+                    )
+                    for tool in tools_for_llm
+                ]
+
+            self.agent["configuration"]["tools"].extend(tools_for_llm)
+
             self.mcp_http_clients.append(
                 {
                     "name": mcp_server["name"],
