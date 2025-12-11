@@ -4,17 +4,16 @@ from __future__ import annotations
 
 __author__ = "bibow"
 
+import asyncio
 import json
 import logging
-import os
-import sys
 import traceback
-import zipfile
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 import boto3
 from botocore.exceptions import BotoCoreError, NoCredentialsError
 
+from mcp_http_client import MCPHttpClient
 from silvaengine_utility import Utility
 
 
@@ -32,7 +31,6 @@ class AIAgentEventHandler:
         """
         try:
             self._initialize_aws_services(setting)
-            self._setup_function_paths(setting)
 
             self.logger = logger
             self.agent = agent
@@ -43,10 +41,44 @@ class AIAgentEventHandler:
             self._short_term_memory = []
             self.setting = setting
 
+            self.mcp_http_clients = []
+            if "mcp_servers" in self.agent:
+                if self.agent["configuration"].pop("mcp_llm_native", False):
+                    tools = [
+                        {
+                            "type": "mcp",
+                            "server_label": mcp_server["name"],
+                            "server_url": mcp_server["setting"]["base_url"],
+                            "headers": mcp_server["setting"]["headers"],
+                            "require_approval": "never",
+                        }
+                        for mcp_server in self.agent["mcp_servers"]
+                    ]
+                    if "tools" in self.agent["configuration"]:
+                        self.agent["configuration"]["tools"].extend(tools)
+                    else:
+                        self.agent["configuration"]["tools"] = tools
+                else:
+                    if self.agent["llm"]["llm_name"] in [
+                        "gemini",
+                        "claude",
+                        "gpt",
+                        "ollama",
+                        "travrse",
+                    ]:
+                        self._initialize_mcp_http_clients(
+                            logger, self.agent["mcp_servers"]
+                        )
+                    else:
+                        raise Exception(
+                            f"Unsupported LLM name: {self.agent['llm']['llm_name']}"
+                        )
+
             # Will hold partial text from streaming
             self.accumulated_text: str = ""
             # Will hold the final output message data, if any
             self.final_output: Dict[str, Any] = {}
+            self.uploaded_files: List[Dict[str, Any]] = []
 
         except (BotoCoreError, NoCredentialsError) as boto_error:
             self.logger.error(f"AWS Boto3 error: {boto_error}")
@@ -57,7 +89,7 @@ class AIAgentEventHandler:
             raise e
 
     @property
-    def endpoint_id(self) -> str:
+    def endpoint_id(self) -> str | None:
         return self._endpoint_id
 
     @endpoint_id.setter
@@ -65,7 +97,7 @@ class AIAgentEventHandler:
         self._endpoint_id = value
 
     @property
-    def run(self) -> Dict[str, Any]:
+    def run(self) -> Dict[str, Any] | None:
         return self._run
 
     @run.setter
@@ -73,7 +105,7 @@ class AIAgentEventHandler:
         self._run = value
 
     @property
-    def connection_id(self) -> str:
+    def connection_id(self) -> str | None:
         return self._connection_id
 
     @connection_id.setter
@@ -112,12 +144,58 @@ class AIAgentEventHandler:
         self.aws_lambda = boto3.client("lambda", **aws_credentials)
         self.aws_s3 = boto3.client("s3", **aws_credentials)
 
-    def _setup_function_paths(self, setting: Dict[str, Any]) -> None:
-        self.funct_bucket_name = setting.get("funct_bucket_name")
-        self.funct_zip_path = setting.get("funct_zip_path", "/tmp/funct_zips")
-        self.funct_extract_path = setting.get("funct_extract_path", "/tmp/functs")
-        os.makedirs(self.funct_zip_path, exist_ok=True)
-        os.makedirs(self.funct_extract_path, exist_ok=True)
+    def _initialize_mcp_http_clients(
+        self, logger: logging.Logger, mcp_servers: List[Dict[str, Any]]
+    ):
+        if "tools" not in self.agent["configuration"]:
+            self.agent["configuration"]["tools"] = []
+
+        for mcp_server in mcp_servers:
+            mcp_http_client = MCPHttpClient(logger, **mcp_server["setting"])
+            tools = asyncio.run(self._run_list_mcp_http_tools(mcp_http_client))
+            tools_for_llm = mcp_http_client.export_tools_for_llm(
+                self.agent["llm"]["llm_name"], tools
+            )
+
+            if self.agent["llm"]["llm_name"] == "travrse":
+                mcp_proxy = self.agent["configuration"]["mcp_proxy"]
+                tools_for_llm = [
+                    dict(
+                        tool,
+                        **{
+                            "config": {
+                                "url": f"{mcp_proxy['base_url']}/{tool['name']}",
+                                "method": "POST",
+                                "headers": mcp_proxy["headers"],
+                            }
+                        },
+                    )
+                    for tool in tools_for_llm
+                ]
+
+            self.agent["configuration"]["tools"].extend(tools_for_llm)
+
+            self.mcp_http_clients.append(
+                {
+                    "name": mcp_server["name"],
+                    "client": mcp_http_client,
+                    "tools": [tool.name for tool in tools],
+                }
+            )
+
+    async def _run_list_mcp_http_tools(self, mcp_http_client):
+        async with mcp_http_client as client:
+            return await client.list_tools()
+
+    async def _run_call_mcp_http_tool(self, mcp_http_client, name, arguments):
+        self.logger.info(f"Calling MCP HTTP tool: {name} with arguments: {arguments}")
+
+        async with mcp_http_client as client:
+            result = await client.call_tool(name, arguments)
+
+            self.logger.info(f"MCP HTTP tool {name} returned result: {result}")
+
+            return result
 
     def invoke_async_funct(self, function_name: str, **params: Dict[str, Any]) -> None:
         if self._run is None:
@@ -143,72 +221,27 @@ class AIAgentEventHandler:
             task_queue=self._task_queue,
         )
 
-    def module_exists(self, module_name: str) -> bool:
-        """Check if the module exists in the specified path."""
-        module_dir = os.path.join(self.funct_extract_path, module_name)
-        if os.path.exists(module_dir) and os.path.isdir(module_dir):
-            self.logger.info(
-                f"Module {module_name} found in {self.funct_extract_path}."
-            )
-            return True
-        self.logger.info(
-            f"Module {module_name} not found in {self.funct_extract_path}."
-        )
-        return False
-
-    def download_and_extract_module(self, module_name: str) -> None:
-        """Download and extract the module from S3 if not already extracted."""
-        key = f"{module_name}.zip"
-        zip_path = f"{self.funct_zip_path}/{key}"
-
-        self.logger.info(
-            f"Downloading module from S3: bucket={self.funct_bucket_name}, key={key}"
-        )
-        self.aws_s3.download_file(self.funct_bucket_name, key, zip_path)
-        self.logger.info(f"Downloaded {key} from S3 to {zip_path}")
-
-        # Extract the ZIP file
-        with zipfile.ZipFile(zip_path, "r") as zip_ref:
-            zip_ref.extractall(self.funct_extract_path)
-        self.logger.info(f"Extracted module to {self.funct_extract_path}")
-
-    def get_class(self, module_name: str, class_name: str) -> Optional[type]:
-        try:
-            # Check if the module exists
-            if not self.module_exists(module_name):
-                # Download and extract the module if it doesn't exist
-                self.download_and_extract_module(module_name)
-
-            # Add the extracted module to sys.path
-            module_path = f"{self.funct_extract_path}/{module_name}"
-            if module_path not in sys.path:
-                sys.path.append(module_path)
-
-            # Import the module and get the class
-            module = __import__(module_name)
-            return getattr(module, class_name)
-        except Exception as e:
-            log = traceback.format_exc()
-            self.logger.error(log)
-            raise e
-
     def get_function(self, function_name: str) -> Optional[Callable]:
         try:
-            function = self.agent["functions"].get(function_name)
-
-            assistant_function_class = self.get_class(
-                function["module_name"], function["class_name"]
-            )
-
-            configuration = self.agent.get("function_configuration", {})
-            configuration.update(function.get("configuration", {}))
-            return getattr(
-                assistant_function_class(
-                    self.logger,
-                    **Utility.json_loads(Utility.json_dumps(configuration)),
+            # Find the MCP HTTP client that has the requested function name in its available tools
+            mcp_http_client = next(
+                (
+                    client["client"]
+                    for client in self.mcp_http_clients
+                    if function_name in client["tools"]
                 ),
-                function_name,
+                None,
             )
+
+            # If function is found in MCP tools, return a lambda that calls it through the MCP client
+            if mcp_http_client:
+                return lambda **arguments: asyncio.run(
+                    self._run_call_mcp_http_tool(
+                        mcp_http_client, function_name, arguments
+                    )
+                )
+
+            raise Exception(f"Function {function_name} not found in MCP tools")
         except Exception as e:
             log = traceback.format_exc()
             self.logger.error(log)
@@ -248,7 +281,7 @@ class AIAgentEventHandler:
         complete_accumulated_json: str,
         accumulated_partial_json: str,
         data_format: str,
-    ) -> str:
+    ) -> tuple[int, str, str]:
         """
         Process and send JSON if it forms a valid structure.
 
@@ -282,7 +315,11 @@ class AIAgentEventHandler:
         return index, complete_accumulated_json, accumulated_partial_json
 
     def process_text_content(
-        self, index: int, accumulated_partial_text: str, output_format: str
+        self,
+        index: int,
+        accumulated_partial_text: str,
+        output_format: str,
+        suffix: str = "",
     ) -> tuple[int, str]:
         """
         Process XML content from accumulated text and send to stream.
@@ -334,6 +371,7 @@ class AIAgentEventHandler:
                                 output_format if "<" in part and ">" in part else "text"
                             ),
                             chunk_delta=part,
+                            suffix=suffix,
                         )
                         index += 1
                 else:
@@ -341,6 +379,7 @@ class AIAgentEventHandler:
                         index=index,
                         data_format=output_format,
                         chunk_delta=accumulated_partial_text,
+                        suffix=suffix,
                     )
                     index += 1
                 accumulated_partial_text = (
@@ -353,6 +392,7 @@ class AIAgentEventHandler:
                 index=index,
                 data_format=output_format,
                 chunk_delta=accumulated_partial_text,
+                suffix=suffix,
             )
             accumulated_partial_text = ""
             index += 1
@@ -364,6 +404,7 @@ class AIAgentEventHandler:
         data_format: str = "text",
         chunk_delta: str = "",
         is_message_end: bool = False,
+        suffix: str = "",
     ) -> None:
         """
         Send data to WebSocket connection.
@@ -377,6 +418,8 @@ class AIAgentEventHandler:
             return
 
         message_group_id = f"{self._connection_id}-{self._run['run_uuid']}"
+        if suffix:
+            message_group_id += f"-{suffix}"
 
         data = Utility.json_dumps(
             {
