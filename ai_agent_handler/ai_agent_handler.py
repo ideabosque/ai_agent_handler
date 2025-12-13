@@ -204,7 +204,7 @@ class AIAgentEventHandler:
 
         params.update(
             {
-                "thread_uuid": self._run["thread"]["thread_uuid"],
+                "thread_uuid": self._run["thread_uuid"],
                 "run_uuid": self._run["run_uuid"],
                 "updated_by": self._run["updated_by"],
             }
