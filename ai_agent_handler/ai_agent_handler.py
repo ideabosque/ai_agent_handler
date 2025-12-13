@@ -37,6 +37,7 @@ class AIAgentEventHandler:
             self._endpoint_id = None
             self._run = None
             self._connection_id = None
+            self._part_id = None
             self._task_queue = None
             self._short_term_memory = []
             self.setting = setting
