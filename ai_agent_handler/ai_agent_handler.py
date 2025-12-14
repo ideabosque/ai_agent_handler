@@ -34,10 +34,7 @@ class AIAgentEventHandler:
 
             self.logger = logger
             self.agent = agent
-            self._endpoint_id = None
             self._run = None
-            self._connection_id = None
-            self._part_id = None
             self._task_queue = None
             self._short_term_memory = []
             self.setting = setting
@@ -90,12 +87,12 @@ class AIAgentEventHandler:
             raise e
 
     @property
-    def endpoint_id(self) -> str | None:
-        return self._endpoint_id
+    def context(self) -> str | None:
+        return self._context
 
-    @endpoint_id.setter
-    def endpoint_id(self, value: str) -> None:
-        self._endpoint_id = value
+    @context.setter
+    def context(self, value: str) -> None:
+        self._context = value
 
     @property
     def run(self) -> Dict[str, Any] | None:
@@ -104,14 +101,6 @@ class AIAgentEventHandler:
     @run.setter
     def run(self, value: Dict[str, Any]) -> None:
         self._run = value
-
-    @property
-    def connection_id(self) -> str | None:
-        return self._connection_id
-
-    @connection_id.setter
-    def connection_id(self, value: str) -> None:
-        self._connection_id = value
 
     @property
     def task_queue(self) -> object:
@@ -210,12 +199,9 @@ class AIAgentEventHandler:
             }
         )
         Utility.invoke_funct_on_aws_lambda(
-            self.logger,
-            self._endpoint_id,
+            self._context,
             function_name,
             params=params,
-            setting=self.setting,
-            test_mode=self.setting.get("test_mode"),
             aws_lambda=self.aws_lambda,
             invocation_type="Event",
             message_group_id=self._run["run_uuid"],
@@ -415,10 +401,11 @@ class AIAgentEventHandler:
             chunk_delta (str): Data chunk to be sent (default: "")
             is_message_end (bool): Flag indicating if this is the last message (default: False)
         """
-        if self._connection_id is None or self._run is None:
+        connection_id = self._context.get("connection_id")
+        if connection_id is None or self._run is None:
             return
 
-        message_group_id = f"{self._connection_id}-{self._run['run_uuid']}"
+        message_group_id = f"{connection_id}-{self._run['run_uuid']}"
         if suffix:
             message_group_id += f"-{suffix}"
 
@@ -433,15 +420,12 @@ class AIAgentEventHandler:
         )
 
         Utility.invoke_funct_on_aws_lambda(
-            self.logger,
-            self._endpoint_id,
+            self._context,
             "send_data_to_stream",
             params={
-                "connection_id": self._connection_id,
+                "connection_id": self._context.get("connection_id"),
                 "data": data,
             },
-            setting=self.setting,
-            test_mode=self.setting.get("test_mode"),
             aws_lambda=self.aws_lambda,
             invocation_type="Event",
             message_group_id=message_group_id,
