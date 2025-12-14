@@ -34,6 +34,7 @@ class AIAgentEventHandler:
 
             self.logger = logger
             self.agent = agent
+            self._context = {}
             self._run = None
             self._task_queue = None
             self._short_term_memory = []
@@ -87,11 +88,11 @@ class AIAgentEventHandler:
             raise e
 
     @property
-    def context(self) -> str | None:
+    def context(self) -> Dict[str, Any] | None:
         return self._context
 
     @context.setter
-    def context(self, value: str) -> None:
+    def context(self, value: Dict[str, Any]) -> None:
         self._context = value
 
     @property
