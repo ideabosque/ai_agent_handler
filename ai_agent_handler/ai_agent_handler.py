@@ -14,7 +14,8 @@ import boto3
 from botocore.exceptions import BotoCoreError, NoCredentialsError
 
 from mcp_http_client import MCPHttpClient
-from silvaengine_utility import Utility
+from silvaengine_utility.invoker import Invoker
+from silvaengine_utility.serializer import Serializer
 
 
 class AIAgentEventHandler:
@@ -199,7 +200,7 @@ class AIAgentEventHandler:
                 "updated_by": self._run["updated_by"],
             }
         )
-        Utility.invoke_funct_on_aws_lambda(
+        Invoker.invoke_funct_on_aws_lambda(
             self._context,
             function_name,
             params=params,
@@ -410,7 +411,7 @@ class AIAgentEventHandler:
         if suffix:
             message_group_id += f"-{suffix}"
 
-        data = Utility.json_dumps(
+        data = Serializer.json_dumps(
             {
                 "message_group_id": message_group_id,
                 "data_format": data_format,
@@ -420,7 +421,7 @@ class AIAgentEventHandler:
             }
         )
 
-        Utility.invoke_funct_on_aws_lambda(
+        Invoker.invoke_funct_on_aws_lambda(
             self._context,
             "send_data_to_stream",
             params={
