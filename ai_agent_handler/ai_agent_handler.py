@@ -149,22 +149,6 @@ class AIAgentEventHandler:
                 self.agent["llm"]["llm_name"], tools
             )
 
-            if self.agent["llm"]["llm_name"] == "travrse":
-                mcp_proxy = self.agent["configuration"]["mcp_proxy"]
-                tools_for_llm = [
-                    dict(
-                        tool,
-                        **{
-                            "config": {
-                                "url": f"{mcp_proxy['base_url']}/{tool['name']}",
-                                "method": "POST",
-                                "headers": mcp_proxy["headers"],
-                            }
-                        },
-                    )
-                    for tool in tools_for_llm
-                ]
-
             self.agent["configuration"]["tools"].extend(tools_for_llm)
 
             self.mcp_http_clients.append(
