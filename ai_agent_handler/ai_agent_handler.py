@@ -14,7 +14,8 @@ import boto3
 from botocore.exceptions import BotoCoreError, NoCredentialsError
 
 from mcp_http_client import MCPHttpClient
-from silvaengine_utility import Utility
+from silvaengine_utility.invoker import Invoker
+from silvaengine_utility.serializer import Serializer
 
 
 class AIAgentEventHandler:
@@ -34,10 +35,8 @@ class AIAgentEventHandler:
 
             self.logger = logger
             self.agent = agent
-            self._endpoint_id = None
+            self._context = {}
             self._run = None
-            self._connection_id = None
-            self._part_id = None
             self._task_queue = None
             self._short_term_memory = []
             self.setting = setting
@@ -90,12 +89,12 @@ class AIAgentEventHandler:
             raise e
 
     @property
-    def endpoint_id(self) -> str | None:
-        return self._endpoint_id
+    def context(self) -> Dict[str, Any] | None:
+        return self._context
 
-    @endpoint_id.setter
-    def endpoint_id(self, value: str) -> None:
-        self._endpoint_id = value
+    @context.setter
+    def context(self, value: Dict[str, Any]) -> None:
+        self._context = value
 
     @property
     def run(self) -> Dict[str, Any] | None:
@@ -104,14 +103,6 @@ class AIAgentEventHandler:
     @run.setter
     def run(self, value: Dict[str, Any]) -> None:
         self._run = value
-
-    @property
-    def connection_id(self) -> str | None:
-        return self._connection_id
-
-    @connection_id.setter
-    def connection_id(self, value: str) -> None:
-        self._connection_id = value
 
     @property
     def task_queue(self) -> object:
@@ -158,22 +149,6 @@ class AIAgentEventHandler:
                 self.agent["llm"]["llm_name"], tools
             )
 
-            if self.agent["llm"]["llm_name"] == "travrse":
-                mcp_proxy = self.agent["configuration"]["mcp_proxy"]
-                tools_for_llm = [
-                    dict(
-                        tool,
-                        **{
-                            "config": {
-                                "url": f"{mcp_proxy['base_url']}/{tool['name']}",
-                                "method": "POST",
-                                "headers": mcp_proxy["headers"],
-                            }
-                        },
-                    )
-                    for tool in tools_for_llm
-                ]
-
             self.agent["configuration"]["tools"].extend(tools_for_llm)
 
             self.mcp_http_clients.append(
@@ -209,13 +184,10 @@ class AIAgentEventHandler:
                 "updated_by": self._run["updated_by"],
             }
         )
-        Utility.invoke_funct_on_aws_lambda(
-            self.logger,
-            self._endpoint_id,
+        Invoker.invoke_funct_on_aws_lambda(
+            self._context,
             function_name,
             params=params,
-            setting=self.setting,
-            test_mode=self.setting.get("test_mode"),
             aws_lambda=self.aws_lambda,
             invocation_type="Event",
             message_group_id=self._run["run_uuid"],
@@ -415,14 +387,15 @@ class AIAgentEventHandler:
             chunk_delta (str): Data chunk to be sent (default: "")
             is_message_end (bool): Flag indicating if this is the last message (default: False)
         """
-        if self._connection_id is None or self._run is None:
+        connection_id = self._context.get("connection_id")
+        if connection_id is None or self._run is None:
             return
 
-        message_group_id = f"{self._connection_id}-{self._run['run_uuid']}"
+        message_group_id = f"{connection_id}-{self._run['run_uuid']}"
         if suffix:
             message_group_id += f"-{suffix}"
 
-        data = Utility.json_dumps(
+        data = Serializer.json_dumps(
             {
                 "message_group_id": message_group_id,
                 "data_format": data_format,
@@ -432,16 +405,13 @@ class AIAgentEventHandler:
             }
         )
 
-        Utility.invoke_funct_on_aws_lambda(
-            self.logger,
-            self._endpoint_id,
+        Invoker.invoke_funct_on_aws_lambda(
+            self._context,
             "send_data_to_stream",
             params={
-                "connection_id": self._connection_id,
+                "connection_id": self._context.get("connection_id"),
                 "data": data,
             },
-            setting=self.setting,
-            test_mode=self.setting.get("test_mode"),
             aws_lambda=self.aws_lambda,
             invocation_type="Event",
             message_group_id=message_group_id,
