@@ -7,7 +7,10 @@ __author__ = "bibow"
 import asyncio
 import json
 import logging
+import os
+import sys
 import traceback
+import zipfile
 from typing import Any, Callable, Dict, List, Optional
 
 import boto3
@@ -89,7 +92,7 @@ class AIAgentEventHandler:
             raise e
 
     @property
-    def context(self) -> Dict[str, Any] | None:
+    def context(self) -> Dict[str, Any]:
         return self._context
 
     @context.setter
@@ -194,6 +197,178 @@ class AIAgentEventHandler:
             task_queue=self._task_queue,
         )
 
+    def _module_exists(self, module_name: str) -> bool:
+        """Check if the module exists in the specified path."""
+        funct_extract_path = self.setting.get("funct_extract_path", "")
+
+        module_dir = os.path.join(
+            self.setting.get("funct_extract_path", ""), module_name
+        )
+        if os.path.exists(module_dir) and os.path.isdir(module_dir):
+            self.logger.info(f"Module {module_name} found in {funct_extract_path}.")
+            return True
+        self.logger.info(f"Module {module_name} not found in {funct_extract_path}.")
+        return False
+
+    def _download_and_extract_package(self, package_name: str) -> None:
+        """Download and extract the module from S3 if not already extracted."""
+        funct_bucket_name = self.setting.get("funct_bucket_name", "")
+        funct_zip_path = self.setting.get("funct_zip_path", "")
+        funct_extract_path = self.setting.get("funct_extract_path", "")
+
+        key = f"{package_name}.zip"
+        zip_path = f"{funct_zip_path}/{key}"
+
+        self.logger.info(
+            f"Downloading module from S3: bucket={funct_bucket_name}, key={key}"
+        )
+        self.aws_s3.download_file(funct_bucket_name, key, zip_path)
+        self.logger.info(f"Downloaded {key} from S3 to {zip_path}")
+
+        # Extract the ZIP file
+        with zipfile.ZipFile(zip_path, "r") as zip_ref:
+            zip_ref.extractall(funct_extract_path)
+        self.logger.info(f"Extracted module to {funct_extract_path}")
+
+    def _get_module(
+        self, package_name: str, module_name: str, source: str = None
+    ) -> type:
+        try:
+            """Get the module class from the package."""
+            funct_extract_path = self.setting.get("funct_extract_path", "")
+
+            if source is None:
+                return getattr(__import__(module_name), module_name)
+
+            # Check if the module exists
+            if not self._module_exists(module_name):
+                # Download and extract the module if it doesn't exist
+                self._download_and_extract_package(package_name)
+
+            # Add the extracted module to sys.path
+            module_path = f"{funct_extract_path}"
+            if module_path not in sys.path:
+                sys.path.append(module_path)
+
+            # Import the module and get the class
+            module = __import__(module_name)
+            return module
+        except Exception as e:
+            log = traceback.format_exc()
+            self.logger.error(log)
+            raise e
+
+    def _get_class(
+        self, package_name: str, module_name: str, class_name: str, source: str = None
+    ) -> Any:
+        try:
+            # Import the module and get the class
+            module = self._get_module(package_name, module_name, source=source)
+            return getattr(module, class_name)
+        except Exception as e:
+            log = traceback.format_exc()
+            self.logger.error(log)
+            raise e
+
+    def _find_tool_config(
+        self, function_name: str
+    ) -> tuple[Dict[str, Any], Dict[str, Any]]:
+        """
+        Find the tool module and class configuration for a given function name.
+
+        Args:
+            function_name: The name of the function to find
+
+        Returns:
+            A tuple of (tool_module_config, tool_class_config)
+
+        Raises:
+            Exception: If the function is not found in any tool module or class
+        """
+        tool_modules = self.agent.get("tool_modules", [])
+
+        if not tool_modules:
+            raise Exception(
+                f"Function '{function_name}' not found: No tool_modules configured in agent"
+            )
+
+        # Search for the module containing the function
+        for tool_module in tool_modules:
+            tool_classes = tool_module.get("tool_classes", [])
+
+            for tool_class in tool_classes:
+                tool_functions = tool_class.get("tool_functions", [])
+
+                if function_name in tool_functions:
+                    # Validate required fields
+                    if "module_name" not in tool_module:
+                        raise Exception(
+                            f"Invalid tool_module configuration: 'module_name' is required"
+                        )
+                    if "class_name" not in tool_class:
+                        raise Exception(
+                            f"Invalid tool_class configuration: 'class_name' is required"
+                        )
+
+                    return tool_module, tool_class
+
+        # Function not found in any module
+        available_functions = [
+            func
+            for module in tool_modules
+            for cls in module.get("tool_classes", [])
+            for func in cls.get("tool_functions", [])
+        ]
+
+        raise Exception(
+            f"Function '{function_name}' not found in tool_modules. "
+            f"Available functions: {', '.join(available_functions) if available_functions else 'none'}"
+        )
+
+    def _instantiate_tool(
+        self,
+        tool_class: type,
+        tool_module_config: Dict[str, Any],
+        tool_class_config: Dict[str, Any],
+    ) -> Any:
+        """
+        Instantiate a tool class with its configuration.
+
+        Args:
+            tool_class: The tool class to instantiate
+            tool_module_config: Module configuration containing settings
+            tool_class_config: Class configuration containing setting_name reference
+
+        Returns:
+            An instance of the tool class
+        """
+        # Get the setting_name from the class config
+        setting_name = tool_class_config.get("setting_name")
+
+        # Retrieve the corresponding settings from the module config
+        if setting_name:
+            module_settings = tool_module_config.get("settings", {})
+            configuration = module_settings.get(setting_name, {})
+        else:
+            # Fallback to empty configuration if no setting_name is specified
+            configuration = {}
+
+        # Normalize and pass the configuration to the tool class
+        normalized_config = Serializer.json_normalize(configuration)
+
+        return tool_class(self.logger, **normalized_config)
+
+    def _set_context_attributes(self, tool_instance: Any) -> None:
+        """
+        Set endpoint_id and part_id attributes on the tool instance if supported.
+
+        Args:
+            tool_instance: The tool instance to set attributes on
+        """
+        if hasattr(tool_instance, "endpoint_id") and hasattr(tool_instance, "part_id"):
+            tool_instance.endpoint_id = self.context.get("endpoint_id")
+            tool_instance.part_id = self.context.get("part_id")
+
     def get_function(self, function_name: str) -> Optional[Callable]:
         try:
             # Find the MCP HTTP client that has the requested function name in its available tools
@@ -214,7 +389,71 @@ class AIAgentEventHandler:
                     )
                 )
 
-            raise Exception(f"Function {function_name} not found in MCP tools")
+            # Expected tool_modules data structure:
+            # A list of tool module configurations. Each module can define reusable settings
+            # and contain one or more tool classes that reference those settings.
+            #
+            # Example:
+            # [
+            #     {
+            #         "module_name": "my_tools_module",           # Required: Python module name to import
+            #         "package_name": "my_tools_package",         # Optional: Package name for S3 download
+            #         "source": "s3",                             # Optional: Source location ("s3", "local", etc.)
+            #         "settings": {                               # Optional: Shared settings dictionary
+            #             "db_config": {                          # Setting name (referenced by tool classes)
+            #                 "host": "localhost",
+            #                 "port": 5432,
+            #                 "database": "mydb"
+            #             },
+            #             "api_config": {                         # Another setting configuration
+            #                 "base_url": "https://api.example.com",
+            #                 "timeout": 30
+            #             }
+            #         },
+            #         "tool_classes": [                           # Required: List of tool classes in this module
+            #             {
+            #                 "class_name": "DatabaseTool",       # Required: Class name to instantiate
+            #                 "setting_name": "db_config",        # Optional: References settings["db_config"]
+            #                 "tool_functions": ["query", "insert"] # Required: Available function names
+            #             },
+            #             {
+            #                 "class_name": "ApiTool",
+            #                 "setting_name": "api_config",       # References settings["api_config"]
+            #                 "tool_functions": ["get", "post"]
+            #             }
+            #         ]
+            #     }
+            # ]
+            #
+            # Flow:
+            # 1. Find function in tool_classes -> tool_functions list
+            # 2. Get setting_name from the matching tool_class
+            # 3. Lookup configuration from module's settings[setting_name]
+            # 4. Instantiate class with: ClassName(logger, **configuration)
+
+            # Find the tool module and class configuration that contains the requested function
+            tool_module_config, tool_class_config = self._find_tool_config(
+                function_name
+            )
+
+            # Dynamically load the tool class from the module
+            tool_class = self._get_class(
+                tool_module_config.get("package_name"),
+                tool_module_config["module_name"],
+                tool_class_config["class_name"],
+                source=tool_module_config.get("source"),
+            )
+
+            # Instantiate the tool with its configuration
+            tool_instance = self._instantiate_tool(
+                tool_class, tool_module_config, tool_class_config
+            )
+
+            # Set endpoint and part IDs if the tool supports them
+            self._set_context_attributes(tool_instance)
+
+            return getattr(tool_instance, function_name)
+
         except Exception as e:
             log = traceback.format_exc()
             self.logger.error(log)
