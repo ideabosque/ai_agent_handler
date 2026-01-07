@@ -428,6 +428,8 @@ class AIAgentEventHandler:
                     "endpoint_id": self._context.get("endpoint_id"),
                     "part_id": self._context.get("part_id"),
                     "funct": function_name,
+                    "connection_id": self._context.get("connection_id"),
+                    "data": data,
                     "context": {
                         "connection_id": self._context.get("connection_id"),
                         "data": data,
