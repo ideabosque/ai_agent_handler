@@ -13,7 +13,7 @@ from typing import Any, Callable, Dict, List, Optional
 import boto3
 from botocore.exceptions import BotoCoreError, NoCredentialsError
 from mcp_http_client import MCPHttpClient
-from silvaengine_utility.invoker import Invoker
+from silvaengine_utility.invoker import Debugger, Invoker
 from silvaengine_utility.serializer import Serializer
 
 
@@ -388,10 +388,12 @@ class AIAgentEventHandler:
             is_message_end (bool): Flag indicating if this is the last message (default: False)
         """
         connection_id = self._context.get("connection_id")
+
         if connection_id is None or self._run is None:
             return
 
         message_group_id = f"{connection_id}-{self._run['run_uuid']}"
+
         if suffix:
             message_group_id += f"-{suffix}"
 
@@ -404,6 +406,40 @@ class AIAgentEventHandler:
                 "is_message_end": is_message_end,
             }
         )
+
+        try:
+            Debugger.info(
+                variable=self._context,
+                logger=self.logger,
+                stage="AI Agent Handler(context)",
+            )
+            function_name = "send_data_to_stream"
+            Invoker.import_dynamically(
+                module_name="ai_agent_core_engine",
+                function_name=function_name,
+                class_name="AIAgentCoreEngine",
+                constructor_parameters={
+                    "setting": self.setting,
+                    "logger": self.logger,
+                },
+            )(
+                **{
+                    "endpoint_id": self._context.get("endpoint_id"),
+                    "part_id": self._context.get("part_id"),
+                    "funct": function_name,
+                    "context": {
+                        "connection_id": self._context.get("connection_id"),
+                        "data": data,
+                    },
+                }
+            )
+        except Exception as e:
+            Debugger.info(
+                variable=e,
+                logger=self.logger,
+                stage="AI Agent Handler Exception(send_data_to_stream)",
+            )
+            pass
 
         Invoker.invoke_funct_on_aws_lambda(
             self._context,
