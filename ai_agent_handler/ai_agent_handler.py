@@ -12,7 +12,6 @@ from typing import Any, Callable, Dict, List, Optional
 
 import boto3
 from botocore.exceptions import BotoCoreError, NoCredentialsError
-
 from mcp_http_client import MCPHttpClient
 from silvaengine_utility.invoker import Invoker
 from silvaengine_utility.serializer import Serializer
@@ -144,13 +143,14 @@ class AIAgentEventHandler:
 
         for mcp_server in mcp_servers:
             mcp_http_client = MCPHttpClient(logger, **mcp_server["setting"])
-            tools = asyncio.run(self._run_list_mcp_http_tools(mcp_http_client))
+            tools = Invoker.sync_call_async_compatible(
+                self._run_list_mcp_http_tools(mcp_http_client)
+            )
             tools_for_llm = mcp_http_client.export_tools_for_llm(
                 self.agent["llm"]["llm_name"], tools
             )
 
             self.agent["configuration"]["tools"].extend(tools_for_llm)
-
             self.mcp_http_clients.append(
                 {
                     "name": mcp_server["name"],
