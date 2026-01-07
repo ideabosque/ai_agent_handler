@@ -430,10 +430,10 @@ class AIAgentEventHandler:
                     "funct": function_name,
                     "connection_id": self._context.get("connection_id"),
                     "data": data,
-                    "context": {
-                        "connection_id": self._context.get("connection_id"),
-                        "data": data,
-                    },
+                    # "context": {
+                    #     "connection_id": self._context.get("connection_id"),
+                    #     "data": data,
+                    # },
                 }
             )
         except Exception as e:
@@ -444,16 +444,16 @@ class AIAgentEventHandler:
             )
             pass
 
-        Invoker.invoke_funct_on_aws_lambda(
-            self._context,
-            "send_data_to_stream",
-            params={
-                "connection_id": self._context.get("connection_id"),
-                "data": data,
-            },
-            aws_lambda=self.aws_lambda,
-            invocation_type="Event",
-            message_group_id=message_group_id,
-            task_queue=self._task_queue,
-        )
+        # Invoker.invoke_funct_on_aws_lambda(
+        #     self._context,
+        #     "send_data_to_stream",
+        #     params={
+        #         "connection_id": self._context.get("connection_id"),
+        #         "data": data,
+        #     },
+        #     aws_lambda=self.aws_lambda,
+        #     invocation_type="Event",
+        #     message_group_id=message_group_id,
+        #     task_queue=self._task_queue,
+        # )
         return
