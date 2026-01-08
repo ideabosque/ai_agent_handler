@@ -31,17 +31,19 @@ class AIAgentEventHandler:
         :param setting: Configuration setting for AWS credentials and region.
         """
         try:
-            self._initialize_aws_services(setting)
-
+            self.setting = setting
             self.logger = logger
             self.agent = agent
+            self.mcp_http_clients = []
+
+            self._initialize_aws_services(setting)
+            self._initialize_message_invoker(logger, setting)
+
             self._context = {}
             self._run = None
             self._task_queue = None
             self._short_term_memory = []
-            self.setting = setting
 
-            self.mcp_http_clients = []
             if "mcp_servers" in self.agent:
                 if self.agent["configuration"].pop("mcp_llm_native", False):
                     tools = [
@@ -135,6 +137,27 @@ class AIAgentEventHandler:
 
         self.aws_lambda = boto3.client("lambda", **aws_credentials)
         self.aws_s3 = boto3.client("s3", **aws_credentials)
+
+
+    def _initialize_message_invoker(self, logger: logging.Logger, setting: Dict[str, Any]) -> None:
+        try:
+            self._message_invoker_name = "send_data_to_stream"
+            self._message_invoker = Invoker.import_dynamically(
+                module_name="ai_agent_core_engine",
+                function_name=function_name,
+                class_name="AIAgentCoreEngine",
+                constructor_parameters={
+                    "setting": self.setting,
+                    "logger": self.logger,
+                },
+            )
+        except Exception as e:
+            Debugger.info(
+                variable=e,
+                logger=self.logger,
+                stage="AI Agent Handler Exception(send_data_to_stream)",
+            )
+            raise e
 
     def _initialize_mcp_http_clients(
         self, logger: logging.Logger, mcp_servers: List[Dict[str, Any]]
@@ -409,31 +432,13 @@ class AIAgentEventHandler:
         )
 
         try:
-            Debugger.info(
-                variable=self._context,
-                logger=self.logger,
-                stage="AI Agent Handler(context)",
-            )
-            function_name = "send_data_to_stream"
-            Invoker.import_dynamically(
-                module_name="ai_agent_core_engine",
-                function_name=function_name,
-                class_name="AIAgentCoreEngine",
-                constructor_parameters={
-                    "setting": self.setting,
-                    "logger": self.logger,
-                },
-            )(
+            self._message_invoker(
                 **{
                     "endpoint_id": self._context.get("endpoint_id"),
                     "part_id": self._context.get("part_id"),
-                    "funct": function_name,
+                    "funct": self._message_invoker_name,
                     "connection_id": self._context.get("connection_id"),
                     "data": data,
-                    # "context": {
-                    #     "connection_id": self._context.get("connection_id"),
-                    #     "data": data,
-                    # },
                 }
             )
         except Exception as e:
@@ -443,17 +448,4 @@ class AIAgentEventHandler:
                 stage="AI Agent Handler Exception(send_data_to_stream)",
             )
             pass
-
-        # Invoker.invoke_funct_on_aws_lambda(
-        #     self._context,
-        #     "send_data_to_stream",
-        #     params={
-        #         "connection_id": self._context.get("connection_id"),
-        #         "data": data,
-        #     },
-        #     aws_lambda=self.aws_lambda,
-        #     invocation_type="Event",
-        #     message_group_id=message_group_id,
-        #     task_queue=self._task_queue,
-        # )
         return
