@@ -147,10 +147,7 @@ class AIAgentEventHandler:
                 module_name="ai_agent_core_engine",
                 function_name=self._message_invoker_name,
                 class_name="AIAgentCoreEngine",
-                constructor_parameters={
-                    "setting": **setting,
-                    "logger": logger,
-                },
+                constructor_parameters={"logger": logger, **setting},
             )
         except Exception as e:
             Debugger.info(
