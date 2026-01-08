@@ -159,7 +159,7 @@ class AIAgentEventHandler:
             Debugger.info(
                 variable=e,
                 logger=logger,
-                stage="AI Agent Handler Exception(send_data_to_stream)",
+                stage="AI Agent Handler Exception(_initialize_message_invoker)",
             )
             raise e
 
