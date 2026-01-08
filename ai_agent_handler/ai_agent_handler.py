@@ -141,20 +141,21 @@ class AIAgentEventHandler:
 
     def _initialize_message_invoker(self, logger: logging.Logger, setting: Dict[str, Any]) -> None:
         try:
+            setting = setting if type(setting) is dict else {}
             self._message_invoker_name = "send_data_to_stream"
             self._message_invoker = Invoker.import_dynamically(
                 module_name="ai_agent_core_engine",
                 function_name=self._message_invoker_name,
                 class_name="AIAgentCoreEngine",
                 constructor_parameters={
-                    "setting": self.setting,
-                    "logger": self.logger,
+                    "setting": **setting,
+                    "logger": logger,
                 },
             )
         except Exception as e:
             Debugger.info(
                 variable=e,
-                logger=self.logger,
+                logger=logger,
                 stage="AI Agent Handler Exception(send_data_to_stream)",
             )
             raise e
