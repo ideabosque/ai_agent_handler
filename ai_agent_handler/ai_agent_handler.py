@@ -144,7 +144,7 @@ class AIAgentEventHandler:
             self._message_invoker_name = "send_data_to_stream"
             self._message_invoker = Invoker.import_dynamically(
                 module_name="ai_agent_core_engine",
-                function_name=function_name,
+                function_name=self._message_invoker_name,
                 class_name="AIAgentCoreEngine",
                 constructor_parameters={
                     "setting": self.setting,
