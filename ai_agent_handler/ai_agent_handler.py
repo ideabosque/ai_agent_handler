@@ -150,7 +150,7 @@ class AIAgentEventHandler:
         try:
             setting = setting if type(setting) is dict else {}
             self._message_invoker_name = "send_data_to_stream"
-            self._message_invoker = Invoker.import_dynamically(
+            self._message_invoker = Invoker.resolve_proxied_callable(
                 module_name="ai_agent_core_engine",
                 function_name=self._message_invoker_name,
                 class_name="AIAgentCoreEngine",
