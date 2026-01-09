@@ -312,7 +312,7 @@ class AIAgentEventHandler:
                 accumulated_partial_json  # Update complete JSON
             )
             accumulated_partial_json = ""  # Reset the partial JSON accumulator
-            # index += 1
+            index += 1
 
         return index, complete_accumulated_json, accumulated_partial_json
 
@@ -375,7 +375,7 @@ class AIAgentEventHandler:
                             chunk_delta=part,
                             suffix=suffix,
                         )
-                        # index += 1
+                        index += 1
                 else:
                     self.send_data_to_stream(
                         index=index,
@@ -383,7 +383,7 @@ class AIAgentEventHandler:
                         chunk_delta=accumulated_partial_text,
                         suffix=suffix,
                     )
-                    # index += 1
+                    index += 1
                 accumulated_partial_text = (
                     ""  # For non-XML content, use buffer threshold
                 )
@@ -397,7 +397,7 @@ class AIAgentEventHandler:
                 suffix=suffix,
             )
             accumulated_partial_text = ""
-            # index += 1
+            index += 1
         return index, accumulated_partial_text
 
     def send_data_to_stream(
