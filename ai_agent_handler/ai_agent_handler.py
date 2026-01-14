@@ -31,12 +31,6 @@ class AIAgentEventHandler:
         :param setting: Configuration setting for AWS credentials and region.
         """
         try:
-            Debugger.info(
-                variable=setting,
-                stage="AI Agent Event Handler(__init__)",
-                logger=logger,
-                delimiter="|",
-            )
             self.setting = setting
             self.logger = logger
             self.agent = agent
