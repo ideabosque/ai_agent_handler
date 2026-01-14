@@ -444,6 +444,7 @@ class AIAgentEventHandler:
             Debugger.info(
                 variable=e,
                 logger=self.logger,
+                setting=self.setting,
                 stage="AI Agent Handler Exception(send_data_to_stream)",
             )
             pass
