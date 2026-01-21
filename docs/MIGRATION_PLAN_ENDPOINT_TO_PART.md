@@ -148,7 +148,7 @@ def send_data_to_stream(
     if suffix:
         message_group_id += f"-{suffix}"
 
-    data = Utility.json_dumps(
+    data = Serializer.json_dumps(
         {
             "message_group_id": message_group_id,
             "data_format": data_format,
@@ -328,7 +328,7 @@ def send_data_to_stream(
     if suffix:
         message_group_id += f"-{suffix}"
 
-    data = Utility.json_dumps(
+    data = Serializer.json_dumps(
         {
             "message_group_id": message_group_id,
             "data_format": data_format,
@@ -372,7 +372,7 @@ def send_data_to_stream(
     if suffix:
         message_group_id += f"-{suffix}"
 
-    data = Utility.json_dumps(
+    data = Serializer.json_dumps(
         {
             "message_group_id": message_group_id,
             "data_format": data_format,

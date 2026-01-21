@@ -7,7 +7,9 @@ __author__ = "bibow"
 import asyncio
 import json
 import logging
+import threading
 import traceback
+from queue import Queue
 from typing import Any, Callable, Dict, List, Optional
 
 import boto3
@@ -121,6 +123,17 @@ class AIAgentEventHandler:
     @short_term_memory.setter
     def short_term_memory(self, value: object) -> None:
         self._short_term_memory = value
+
+    # @Utility.performance_monitor.monitor_operation(operation_name="OpenAI")
+    def ask_model(
+        self,
+        input_messages: List[Dict[str, Any]],
+        queue: Queue = None,
+        stream_event: threading.Event = None,
+        input_files: List[str] = None,
+        model_setting: Dict[str, Any] = None,
+    ):
+        raise NotImplementedError("Subclasses must implement the handle method.")
 
     def _initialize_aws_services(self, setting: Dict[str, Any]) -> None:
         if all(
