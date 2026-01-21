@@ -46,6 +46,12 @@ class AIAgentEventHandler:
             self._task_queue = None
             self._short_term_memory = []
 
+            Debugger.info(
+                variable=self.agent,
+                stage=f"{__name__}:initialize-1",
+                delimiter="~",
+            )
+
             if "mcp_servers" in self.agent:
                 if self.agent["configuration"].pop("mcp_llm_native", False):
                     tools = [
