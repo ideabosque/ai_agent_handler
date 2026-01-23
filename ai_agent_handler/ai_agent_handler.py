@@ -46,12 +46,6 @@ class AIAgentEventHandler:
             self._task_queue = None
             self._short_term_memory = []
 
-            Debugger.info(
-                variable=self.agent,
-                stage=f"{__name__}:initialize-1",
-                delimiter="~",
-            )
-
             if "mcp_servers" in self.agent:
                 if self.agent["configuration"].pop("mcp_llm_native", False):
                     tools = [
@@ -158,7 +152,9 @@ class AIAgentEventHandler:
         self.aws_s3 = boto3.client("s3", **aws_credentials)
 
     def _initialize_message_invoker(
-        self, logger: logging.Logger, setting: Dict[str, Any]
+        self,
+        logger: logging.Logger,
+        setting: Dict[str, Any],
     ) -> None:
         try:
             setting = setting if type(setting) is dict else {}
@@ -174,6 +170,7 @@ class AIAgentEventHandler:
                 variable=e,
                 logger=logger,
                 stage="AI Agent Handler Exception(_initialize_message_invoker)",
+                setting=setting,
             )
             raise e
 
