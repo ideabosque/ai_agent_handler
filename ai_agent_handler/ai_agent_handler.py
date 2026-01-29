@@ -456,8 +456,6 @@ class AIAgentEventHandler:
                     "data": data,
                 }
             )
-
-            Debugger.info(variable=data, stage=f"{__file__}.send_data_to_stream")
         except Exception as e:
             Debugger.info(
                 variable=e,
