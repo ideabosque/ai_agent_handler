@@ -204,6 +204,9 @@ class AIAgentEventHandler:
 
     async def _run_call_mcp_http_tool(self, mcp_http_client, name, arguments):
         self.logger.info(f"Calling MCP HTTP tool: {name} with arguments: {arguments}")
+        print(">>>" * 40)
+        print(arguments)
+        print("<<<" * 40)
 
         async with mcp_http_client as client:
             result = await client.call_tool(name, arguments)
