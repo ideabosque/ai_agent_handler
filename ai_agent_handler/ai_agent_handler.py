@@ -212,7 +212,13 @@ class AIAgentEventHandler:
 
             return result
 
-    def invoke_async_funct(self, function_name: str, **params: Dict[str, Any]) -> None:
+    def invoke_async_funct(
+        self,
+        module_name: str,
+        function_name: str,
+        class_name: str,
+        **params: Dict[str, Any],
+    ) -> None:
         if self._run is None:
             return
 
@@ -230,22 +236,12 @@ class AIAgentEventHandler:
             invoker(
                 payload=Invoker.build_invoker_payload(
                     context=self._context,
-                    module_name="ai_agent_core_engine",
-                    class_name="AIAgentCoreEngine",
+                    module_name=module_name,
+                    class_name=class_name,
                     function_name=function_name,
                     parameters=params,
                 ),
             )
-
-        # Invoker.invoke_funct_on_aws_lambda(
-        #     self._context,
-        #     function_name,
-        #     params=params,
-        #     aws_lambda=self.aws_lambda,
-        #     invocation_type="Event",
-        #     message_group_id=self._run["run_uuid"],
-        #     task_queue=self._task_queue,
-        # )
 
     def get_function(self, function_name: str) -> Optional[Callable]:
         try:
