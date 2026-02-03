@@ -204,9 +204,6 @@ class AIAgentEventHandler:
 
     async def _run_call_mcp_http_tool(self, mcp_http_client, name, arguments):
         self.logger.info(f"Calling MCP HTTP tool: {name} with arguments: {arguments}")
-        print(">>>" * 40)
-        print(arguments)
-        print("<<<" * 40)
 
         async with mcp_http_client as client:
             result = await client.call_tool(name, arguments)
@@ -226,6 +223,20 @@ class AIAgentEventHandler:
                 "updated_by": self._run["updated_by"],
             }
         )
+
+        invoker = self._context.get("aws_lambda_invoker")
+
+        if callable(invoker):
+            invoker(
+                payload=Invoker.build_invoker_payload(
+                    context=self._context,
+                    module_name="ai_agent_core_engine",
+                    class_name="AIAgentCoreEngine",
+                    function_name=function_name,
+                    parameters=params,
+                ),
+            )
+
         Invoker.invoke_funct_on_aws_lambda(
             self._context,
             function_name,
