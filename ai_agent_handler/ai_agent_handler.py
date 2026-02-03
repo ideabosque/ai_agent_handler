@@ -237,15 +237,15 @@ class AIAgentEventHandler:
                 ),
             )
 
-        Invoker.invoke_funct_on_aws_lambda(
-            self._context,
-            function_name,
-            params=params,
-            aws_lambda=self.aws_lambda,
-            invocation_type="Event",
-            message_group_id=self._run["run_uuid"],
-            task_queue=self._task_queue,
-        )
+        # Invoker.invoke_funct_on_aws_lambda(
+        #     self._context,
+        #     function_name,
+        #     params=params,
+        #     aws_lambda=self.aws_lambda,
+        #     invocation_type="Event",
+        #     message_group_id=self._run["run_uuid"],
+        #     task_queue=self._task_queue,
+        # )
 
     def get_function(self, function_name: str) -> Optional[Callable]:
         try:
