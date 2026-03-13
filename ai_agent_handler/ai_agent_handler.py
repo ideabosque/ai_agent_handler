@@ -46,6 +46,13 @@ class AIAgentEventHandler:
             self._task_queue = None
             self._short_term_memory = []
 
+            if "num_of_messages" in self.agent:
+                self.agent["num_of_messages"] = (
+                    int(self.agent["num_of_messages"])
+                    if self.agent["num_of_messages"]
+                    else 0
+                )
+
             if "mcp_servers" in self.agent:
                 if self.agent["configuration"].pop("mcp_llm_native", False):
                     tools = [
