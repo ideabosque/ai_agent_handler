@@ -254,15 +254,15 @@ _cache_lock = threading.Lock()
 
 
 def get_mcp_tool_cache(
-    ttl_seconds: int = 300,
-    max_size: int = 100,
+    ttl_seconds: int = 600,
+    max_size: int = 200,
     logger: Optional[logging.Logger] = None
 ) -> MCPToolCache:
     """Get or create the global MCP tool cache instance.
     
     Args:
-        ttl_seconds: Time-to-live for cache entries
-        max_size: Maximum number of cache entries
+        ttl_seconds: Time-to-live for cache entries (default: 600 = 10 minutes)
+        max_size: Maximum number of cache entries (default: 200)
         logger: Logger instance
         
     Returns:

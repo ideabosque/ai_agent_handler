@@ -189,51 +189,29 @@ class AIAgentEventHandler:
     ):
         if "tools" not in self.agent["configuration"]:
             self.agent["configuration"]["tools"] = []
-        
-        # Check if MCP tool caching is enabled
-        enable_cache = os.getenv("ENABLE_MCP_TOOL_CACHE", "false").lower() == "true"
+
         cache_ttl = int(os.getenv("MCP_TOOL_CACHE_TTL_SECONDS", "300"))
         cache_max_size = int(os.getenv("MCP_TOOL_CACHE_MAX_SIZE", "100"))
-        
-        if enable_cache:
-            cache = get_mcp_tool_cache(
-                ttl_seconds=cache_ttl,
-                max_size=cache_max_size,
-                logger=logger
-            )
-            logger.info("MCP tool caching enabled with TTL=%ds", cache_ttl)
+
+        cache = get_mcp_tool_cache(
+            ttl_seconds=cache_ttl,
+            max_size=cache_max_size,
+            logger=logger
+        )
+        logger.info("MCP tool caching enabled with TTL=%ds", cache_ttl)
 
         for mcp_server in mcp_servers:
             mcp_http_client = MCPHttpClient(logger, **mcp_server["setting"])
-            
-            # Try to get from cache first
-            if enable_cache:
-                cached = cache.get(mcp_server)
-                if cached is not None:
-                    tools, tools_for_llm, tool_names = cached
-                    logger.info(
-                        "Using cached tools for MCP server: %s (%d tools)",
-                        mcp_server.get("name", "unknown"),
-                        len(tool_names)
-                    )
-                else:
-                    # Fetch and cache
-                    tools = Invoker.sync_call_async_compatible(
-                        self._run_list_mcp_http_tools(mcp_http_client)
-                    )
-                    tools_for_llm = mcp_http_client.export_tools_for_llm(
-                        self.agent["llm"]["llm_name"], tools
-                    )
-                    tool_names = [tool.name for tool in tools]
-                    
-                    cache.set(mcp_server, tools, tools_for_llm, tool_names)
-                    logger.info(
-                        "Fetched and cached tools for MCP server: %s (%d tools)",
-                        mcp_server.get("name", "unknown"),
-                        len(tool_names)
-                    )
+
+            cached = cache.get(mcp_server)
+            if cached is not None:
+                tools, tools_for_llm, tool_names = cached
+                logger.info(
+                    "Using cached tools for MCP server: %s (%d tools)",
+                    mcp_server.get("name", "unknown"),
+                    len(tool_names)
+                )
             else:
-                # Original behavior without caching
                 tools = Invoker.sync_call_async_compatible(
                     self._run_list_mcp_http_tools(mcp_http_client)
                 )
@@ -241,6 +219,13 @@ class AIAgentEventHandler:
                     self.agent["llm"]["llm_name"], tools
                 )
                 tool_names = [tool.name for tool in tools]
+
+                cache.set(mcp_server, tools, tools_for_llm, tool_names)
+                logger.info(
+                    "Fetched and cached tools for MCP server: %s (%d tools)",
+                    mcp_server.get("name", "unknown"),
+                    len(tool_names)
+                )
 
             self.agent["configuration"]["tools"].extend(tools_for_llm)
             self.mcp_http_clients.append(
