@@ -190,15 +190,12 @@ class AIAgentEventHandler:
         if "tools" not in self.agent["configuration"]:
             self.agent["configuration"]["tools"] = []
 
-        cache_ttl = int(os.getenv("MCP_TOOL_CACHE_TTL_SECONDS", "300"))
-        cache_max_size = int(os.getenv("MCP_TOOL_CACHE_MAX_SIZE", "100"))
-
         cache = get_mcp_tool_cache(
-            ttl_seconds=cache_ttl,
-            max_size=cache_max_size,
+            ttl_seconds=600,
+            max_size=200,
             logger=logger
         )
-        logger.info("MCP tool caching enabled with TTL=%ds", cache_ttl)
+        logger.info("MCP tool caching enabled with TTL=600s, max_size=200")
 
         for mcp_server in mcp_servers:
             mcp_http_client = MCPHttpClient(logger, **mcp_server["setting"])

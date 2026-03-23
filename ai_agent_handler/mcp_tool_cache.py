@@ -29,19 +29,19 @@ class MCPToolCache:
     """MCP Tool Cache Manager.
     
     Provides caching for MCP tool lists with TTL-based expiration.
-    Thread-safe implementation for concurrent access.
+    Thread-safe implementation for concurrent access with read-heavy optimization.
     """
     
     def __init__(
         self,
-        ttl_seconds: int = 300,
-        max_size: int = 100,
+        ttl_seconds: int = 600,
+        max_size: int = 200,
         logger: Optional[logging.Logger] = None
     ):
         """Initialize the MCP tool cache.
         
         Args:
-            ttl_seconds: Time-to-live for cache entries in seconds (default: 300 = 5 minutes)
+            ttl_seconds: Time-to-live for cache entries in seconds (default: 600 = 10 minutes)
             max_size: Maximum number of cache entries
             logger: Logger instance
         """
@@ -88,36 +88,35 @@ class MCPToolCache:
         Returns:
             Tuple of (tools, tools_for_llm, tool_names) if cached and valid, None otherwise
         """
-        with self._lock:
-            self._stats["total_requests"] += 1
-            
-            cache_key = self._generate_cache_key(mcp_server_config)
-            entry = self._cache.get(cache_key)
-            
-            if entry is None:
-                self._stats["misses"] += 1
-                self.logger.debug(
-                    f"Cache miss for MCP server: {mcp_server_config.get('name', 'unknown')}"
-                )
-                return None
-            
-            # Check if entry has expired
-            if time.time() - entry.timestamp > self.ttl:
-                self._stats["misses"] += 1
-                self.logger.debug(
-                    f"Cache expired for MCP server: {mcp_server_config.get('name', 'unknown')}"
-                )
-                del self._cache[cache_key]
-                return None
-            
-            # Cache hit
-            self._stats["hits"] += 1
+        self._stats["total_requests"] += 1
+        
+        cache_key = self._generate_cache_key(mcp_server_config)
+        entry = self._cache.get(cache_key)
+        
+        if entry is None:
+            self._stats["misses"] += 1
             self.logger.debug(
-                f"Cache hit for MCP server: {mcp_server_config.get('name', 'unknown')} "
-                f"(age: {time.time() - entry.timestamp:.1f}s)"
+                f"Cache miss for MCP server: {mcp_server_config.get('name', 'unknown')}"
             )
-            
-            return (entry.tools, entry.tools_for_llm, entry.tool_names)
+            return None
+        
+        if time.time() - entry.timestamp > self.ttl:
+            with self._lock:
+                if cache_key in self._cache and time.time() - self._cache[cache_key].timestamp > self.ttl:
+                    del self._cache[cache_key]
+            self._stats["misses"] += 1
+            self.logger.debug(
+                f"Cache expired for MCP server: {mcp_server_config.get('name', 'unknown')}"
+            )
+            return None
+        
+        self._stats["hits"] += 1
+        self.logger.debug(
+            f"Cache hit for MCP server: {mcp_server_config.get('name', 'unknown')} "
+            f"(age: {time.time() - entry.timestamp:.1f}s)"
+        )
+        
+        return (entry.tools, entry.tools_for_llm, entry.tool_names)
     
     def set(
         self,
@@ -134,10 +133,9 @@ class MCPToolCache:
             tools_for_llm: List of tools formatted for LLM
             tool_names: List of tool names
         """
+        cache_key = self._generate_cache_key(mcp_server_config)
+        
         with self._lock:
-            cache_key = self._generate_cache_key(mcp_server_config)
-            
-            # Evict old entries if cache is full
             if len(self._cache) >= self.max_size and cache_key not in self._cache:
                 self._evict_oldest()
             
