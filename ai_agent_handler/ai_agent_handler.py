@@ -45,6 +45,10 @@ class AIAgentEventHandler:
             self._run = None
             self._task_queue = None
             self._short_term_memory = []
+            # Set True once the WebSocket client has gone away (send returned
+            # False) or the gateway signalled cancellation. Streaming loops
+            # check is_stream_cancelled() to stop generating early.
+            self._stream_closed = False
 
             if "mcp_servers" in self.agent:
                 if self.agent["configuration"].pop("mcp_llm_native", False):
@@ -107,6 +111,9 @@ class AIAgentEventHandler:
     @run.setter
     def run(self, value: Dict[str, Any]) -> None:
         self._run = value
+        # A new run starts connected — clear any cancellation latched by a
+        # previous run on a reused handler instance.
+        self._stream_closed = False
 
     @property
     def task_queue(self) -> object:
@@ -441,6 +448,11 @@ class AIAgentEventHandler:
         if connection_id is None or self._run is None:
             return
 
+        # Cooperative cancellation: once the client has disconnected there is
+        # nowhere to send, so skip the invoker round-trip entirely.
+        if self.is_stream_cancelled():
+            return
+
         message_group_id = f"{connection_id}-{self._run['run_uuid']}"
 
         if suffix:
@@ -457,7 +469,7 @@ class AIAgentEventHandler:
         )
 
         try:
-            self._message_invoker(
+            sent = self._message_invoker(
                 **{
                     "endpoint_id": self._context.get("endpoint_id"),
                     "part_id": self._context.get("part_id"),
@@ -466,6 +478,13 @@ class AIAgentEventHandler:
                     "data": data,
                 }
             )
+            # In SilvaEngine Gateway mode the invoker returns the
+            # ConnectionManager's bool: False means the connection is gone
+            # (client disconnected mid-stream). Latch it so subsequent chunks
+            # and the generation loop stop. Non-gateway invokers return None,
+            # which we treat as "still connected" (unchanged behaviour).
+            if sent is False:
+                self._stream_closed = True
         except Exception as e:
             Debugger.info(
                 variable=e,
@@ -475,3 +494,35 @@ class AIAgentEventHandler:
             )
             pass
         return
+
+    def is_stream_cancelled(self) -> bool:
+        """Whether the current streaming run should stop early.
+
+        True once the WebSocket client disconnected — detected either via the
+        gateway's injected ``context["is_cancelled"]`` signal or by a send that
+        reported the connection gone (``self._stream_closed``). Streaming loops
+        in the provider handlers check this to break out and stop generating
+        tokens for a client that is no longer listening. Always False in
+        deployments that do not supply the signal, so non-streaming and
+        Lambda/API-Gateway paths are unaffected.
+        """
+        if self._stream_closed:
+            return True
+        # The gateway injects ``is_cancelled`` into its request context. Depending
+        # on the entry path that dict reaches the handler either at the top level
+        # or nested under ``context`` (the async listener path builds a
+        # ResolveInfo context that carries the original request context under a
+        # "context" key). Check both so the signal is honoured regardless.
+        is_cancelled = self._context.get("is_cancelled")
+        if not callable(is_cancelled):
+            nested = self._context.get("context")
+            if isinstance(nested, dict):
+                is_cancelled = nested.get("is_cancelled")
+        if callable(is_cancelled):
+            try:
+                if is_cancelled():
+                    self._stream_closed = True
+                    return True
+            except Exception:
+                return False
+        return False
