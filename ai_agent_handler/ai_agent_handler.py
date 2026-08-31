@@ -465,6 +465,12 @@ class AIAgentEventHandler:
                 "index": index,
                 "chunk_delta": chunk_delta,
                 "is_message_end": is_message_end,
+                # Lets clients that didn't supply a thread_uuid up front
+                # (letting the core engine create one) learn the resolved
+                # value and reuse it on subsequent turns, instead of
+                # omitting it forever and getting a brand-new thread every
+                # turn.
+                "thread_uuid": self._run.get("thread_uuid"),
             }
         )
 
