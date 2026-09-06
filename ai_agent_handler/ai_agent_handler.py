@@ -188,6 +188,9 @@ class AIAgentEventHandler:
             self.agent["configuration"]["tools"] = []
 
         for mcp_server in mcp_servers:
+            # mcp_server["setting"] is forwarded as **kwargs to MCPHttpClient.
+            # Supported keys: base_url (required), bearer_token, headers,
+            # timeout (optional, default 90s — total request timeout in seconds).
             mcp_http_client = MCPHttpClient(logger, **mcp_server["setting"])
             tools = Invoker.sync_call_async_compatible(
                 self._run_list_mcp_http_tools(mcp_http_client)
